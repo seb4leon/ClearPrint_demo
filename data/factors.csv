@@ -1,0 +1,89 @@
+category,subcategory,item,unit,factor_kgCO2e_per_unit,source,year,region
+materia_prima,cereales,Trigo,kg,0.5,FAO,2023,Global
+materia_prima,cereales,Maíz,kg,0.4,FAO,2023,Global
+materia_prima,cereales,Arroz,kg,1.2,FAO,2023,Global
+materia_prima,cereales,Avena,kg,0.6,FAO,2023,Global
+materia_prima,cereales,Centeno,kg,0.5,FAO,2023,Global
+materia_prima,lacteos,Leche entera,kg,1.4,Agribalyse,2022,UE
+materia_prima,lacteos,Queso,kg,8.5,Agribalyse,2022,UE
+materia_prima,lacteos,Mantequilla,kg,9.2,Agribalyse,2022,UE
+materia_prima,lacteos,Yogur,kg,1.8,Agribalyse,2022,UE
+materia_prima,frutas,Manzana,kg,0.3,FAO,2023,Global
+materia_prima,frutas,Naranja,kg,0.4,FAO,2023,Global
+materia_prima,frutas,Plátano,kg,0.5,FAO,2023,Global
+materia_prima,frutas,Frutilla,kg,0.7,FAO,2023,Global
+materia_prima,frutas,Uva,kg,0.6,FAO,2023,Global
+materia_prima,verduras,Tomate,kg,0.2,FAO,2023,Global
+materia_prima,verduras,Zanahoria,kg,0.1,FAO,2023,Global
+materia_prima,verduras,Lechuga,kg,0.3,FAO,2023,Global
+materia_prima,verduras,Cebolla,kg,0.2,FAO,2023,Global
+materia_prima,verduras,Papa,kg,0.2,FAO,2023,Global
+materia_prima,carnes,Carne de vacuno,kg,27.0,FAO,2023,Global
+materia_prima,carnes,Carne de cerdo,kg,6.5,FAO,2023,Global
+materia_prima,carnes,Pollo,kg,4.2,FAO,2023,Global
+materia_prima,carnes,Cordero,kg,20.5,FAO,2023,Global
+materia_prima,pescados,Salmón,kg,4.8,FAO,2023,Global
+materia_prima,pescados,Atún,kg,3.9,FAO,2023,Global
+materia_prima,pescados,Merluza,kg,3.5,FAO,2023,Global
+materia_prima,pescados,Camarón,kg,8.2,FAO,2023,Global
+materia_prima,aceites,Aceite de oliva,kg,4.8,FAO,2023,Global
+materia_prima,aceites,Aceite de girasol,kg,2.5,FAO,2023,Global
+materia_prima,aceites,Aceite de palma,kg,4.2,FAO,2023,Global
+materia_prima,endulzantes,Azúcar,kg,0.8,FAO,2023,Global
+materia_prima,endulzantes,Miel,kg,1.2,FAO,2023,Global
+materia_prima,endulzantes,Stevia,kg,1.5,FAO,2023,Global
+materia_prima,bebidas,Café,kg,4.8,FAO,2023,Global
+materia_prima,bebidas,Té,kg,2.1,FAO,2023,Global
+materia_prima,bebidas,Cacao,kg,4.5,FAO,2023,Global
+materia_prima,especias,Sal,kg,0.3,FAO,2023,Global
+materia_prima,especias,Pimienta,kg,1.8,FAO,2023,Global
+material_empaque,plasticos,PET,kg,2.5,Ecoinvent,2022,Global
+material_empaque,plasticos,PP,kg,2.0,Ecoinvent,2022,Global
+material_empaque,plasticos,PVC,kg,3.2,Ecoinvent,2022,Global
+material_empaque,plasticos,LDPE,kg,2.3,Ecoinvent,2022,Global
+material_empaque,plasticos,HDPE,kg,2.1,Ecoinvent,2022,Global
+material_empaque,papel,Cartón,kg,0.8,Ecoinvent,2022,Global
+material_empaque,papel,Papel kraft,kg,1.1,Ecoinvent,2022,Global
+material_empaque,papel,Cartulina,kg,1.3,Ecoinvent,2022,Global
+material_empaque,papel,Papel reciclado,kg,0.6,Ecoinvent,2022,Global
+material_empaque,vidrio,Vidrio,kg,0.9,Ecoinvent,2022,Global
+material_empaque,vidrio,Vidrio reciclado,kg,0.7,Ecoinvent,2022,Global
+material_empaque,metales,Aluminio,kg,8.1,Ecoinvent,2022,Global
+material_empaque,metales,Acero,kg,1.9,Ecoinvent,2022,Global
+material_empaque,metales,Hoja de lata,kg,2.5,Ecoinvent,2022,Global
+material_empaque,bioplasticos,PLA,kg,1.8,Ecoinvent,2022,Global
+material_empaque,bioplasticos,Almidón,kg,1.2,Ecoinvent,2022,Global
+material_empaque,textiles,Algodón,kg,5.5,Ecoinvent,2022,Global
+material_empaque,textiles,Poliester,kg,3.8,Ecoinvent,2022,Global
+transporte,terrestre,Camión diesel,ton-km,0.1,IPCC,2021,Global
+transporte,terrestre,Furgoneta,ton-km,0.2,IPCC,2021,Global
+transporte,terrestre,Camión eléctrico,ton-km,0.05,IPCC,2021,Global
+transporte,terrestre,Camión gas natural,ton-km,0.08,IPCC,2021,Global
+transporte,maritimo,Barco carga,ton-km,0.02,IPCC,2021,Global
+transporte,maritimo,Barco contenedores,ton-km,0.015,IPCC,2021,Global
+transporte,aereo,Avión carga,ton-km,0.8,IPCC,2021,Global
+transporte,aereo,Avión pasajeros,ton-km,0.6,IPCC,2021,Global
+transporte,ferreo,Tren diesel,ton-km,0.03,IPCC,2021,Global
+transporte,ferreo,Tren eléctrico,ton-km,0.01,IPCC,2021,Global
+transporte,fluvial,Barcaza,ton-km,0.025,IPCC,2021,Global
+energia,electricidad,Red eléctrica promedio,kWh,0.5,IPCC,2021,Global
+energia,electricidad,Energía solar,kWh,0.05,IPCC,2021,Global
+energia,electricidad,Energía eólica,kWh,0.01,IPCC,2021,Global
+energia,electricidad,Energía hidroeléctrica,kWh,0.02,IPCC,2021,Global
+energia,electricidad,Energía nuclear,kWh,0.01,IPCC,2021,Global
+energia,combustibles,Gas natural,kWh,0.2,IPCC,2021,Global
+energia,combustibles,Diesel,kWh,0.27,IPCC,2021,Global
+energia,combustibles,Gasolina,kWh,0.25,IPCC,2021,Global
+energia,combustibles,Carbón,kWh,0.35,IPCC,2021,Global
+energia,combustibles,Biomasa,kWh,0.08,IPCC,2021,Global
+energia,calor,Vapor,kWh,0.15,IPCC,2021,Global
+energia,calor,Agua caliente,kWh,0.12,IPCC,2021,Global
+agua,potable,Agua potable,m3,0.5,Ecoinvent,2022,Global
+agua,potable,Agua embotellada,m3,2.5,Ecoinvent,2022,Global
+agua,residual,Agua residual,m3,0.8,Ecoinvent,2022,Global
+agua,tratamiento,Tratamiento agua,m3,0.3,Ecoinvent,2022,Global
+residuo,disposicion,Vertedero,kg,0.3,IPCC,2021,Global
+residuo,disposicion,Incineración,kg,0.6,IPCC,2021,Global
+residuo,disposicion,Compostaje,kg,-0.1,IPCC,2021,Global
+residuo,disposicion,Reciclaje,kg,-1.5,IPCC,2021,Global
+residuo,disposicion,Reutilización,kg,-2.0,IPCC,2021,Global
