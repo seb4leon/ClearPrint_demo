@@ -37,6 +37,11 @@ materia_prima,bebidas,Té,kg,2.1,FAO,2023,Global
 materia_prima,bebidas,Cacao,kg,4.5,FAO,2023,Global
 materia_prima,especias,Sal,kg,0.3,FAO,2023,Global
 materia_prima,especias,Pimienta,kg,1.8,FAO,2023,Global
+materia_prima,snacks_ingredients,Pasta de dátil,kg,1.0,FAO,2023,Global
+materia_prima,snacks_ingredients,Avena en escama,kg,0.8,FAO,2023,Global
+materia_prima,snacks_ingredients,Pasta de almendra,kg,2.2,FAO,2023,Global
+materia_prima,snacks_ingredients,Almendra sin piel en lámina,kg,2.0,FAO,2023,Global
+materia_prima,snacks_ingredients,Limón en polvo liofilizado,kg,1.5,FAO,2023,Global
 material_empaque,plasticos,PET,kg,2.5,Ecoinvent,2022,Global
 material_empaque,plasticos,PP,kg,2.0,Ecoinvent,2022,Global
 material_empaque,plasticos,PVC,kg,3.2,Ecoinvent,2022,Global
