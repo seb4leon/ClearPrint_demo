@@ -1,0 +1,136 @@
+"""
+Tests unitarios para las funciones de cálculo - FASE 1
+"""
+
+import pytest
+import pandas as pd
+import sys
+import os
+
+# Agregar el directorio utils al path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from utils.calculos import (
+    obtener_factor,
+    calcular_emisiones_materias_primas,
+    calcular_emisiones_empaques,
+    calcular_emisiones_transporte_materias_primas,
+    calcular_emisiones_transporte_empaques,
+    calcular_balance_masa,
+    validar_datos_completos
+)
+from utils.units import convertir_unidad, formatear_numero
+
+# Datos de prueba actualizados
+FACTORES_PRUEBA = pd.DataFrame({
+    'category': ['materia_prima', 'material_empaque', 'transporte', 'energia', 'agua', 'residuo'],
+    'subcategory': ['cereales', 'plasticos', 'terrestre', 'electricidad', 'potable', 'disposicion'],
+    'item': ['Trigo', 'PET', 'Camión diesel', 'Red eléctrica', 'Agua potable', 'Vertedero'],
+    'unit': ['kg', 'kg', 'ton-km', 'kWh', 'm3', 'kg'],
+    'factor_kgCO2e_per_unit': [0.5, 2.5, 0.1, 0.5, 0.5, 0.3]
+})
+
+def test_convertir_unidad():
+    """Test para conversión de unidades"""
+    assert convertir_unidad(1000, 'g', 'kg') == 1.0
+    assert convertir_unidad(1, 'kg', 'g') == 1000.0
+    assert convertir_unidad(1000, 'ml', 'L') == 1.0
+
+def test_formatear_numero():
+    """Test para formato de números en español"""
+    assert formatear_numero(1234.567) == "1.234,567"
+    assert formatear_numero(0.001234) == "0,001"
+
+def test_calcular_emisiones_materias_primas():
+    """Test para cálculo de emisiones de materias primas con nueva estructura"""
+    materias_prueba = [
+        {
+            'producto': 'Trigo',
+            'cantidad_real_kg': 10.0,
+            'empaque': None
+        }
+    ]
+    
+    resultado, detalle = calcular_emisiones_materias_primas(materias_prueba, FACTORES_PRUEBA)
+    esperado = 10.0 * 0.5  # 10 kg × 0.5 kg CO₂e/kg
+    assert resultado == esperado
+
+def test_calcular_emisiones_empaques():
+    """Test para cálculo de emisiones de empaques"""
+    empaques_prueba = [
+        {
+            'nombre': 'Bolsa',
+            'material': 'PET',
+            'peso_kg': 0.1,
+            'cantidad': 1
+        }
+    ]
+    
+    resultado, detalle = calcular_emisiones_empaques(empaques_prueba, FACTORES_PRUEBA)
+    esperado = 0.1 * 2.5  # 0.1 kg × 2.5 kg CO₂e/kg
+    assert resultado == esperado
+
+def test_calcular_emisiones_transporte_materias_primas():
+    """Test para cálculo de emisiones de transporte de materias primas"""
+    materias_prueba = [
+        {
+            'producto': 'Trigo',
+            'transportes': [
+                {
+                    'tipo_transporte': 'Camión diesel',
+                    'distancia_km': 100.0,
+                    'carga_ton': 0.5
+                }
+            ]
+        }
+    ]
+    
+    resultado, detalle = calcular_emisiones_transporte_materias_primas(materias_prueba, FACTORES_PRUEBA)
+    esperado = 100.0 * 0.5 * 0.1  # 100 km × 0.5 ton × 0.1 kg CO₂e/ton-km
+    assert resultado == esperado
+
+def test_calcular_balance_masa():
+    """Test para cálculo de balance de masa"""
+    materias_prueba = [
+        {
+            'producto': 'Trigo',
+            'cantidad_real_kg': 10.0,
+            'empaque': {'peso_kg': 0.1}
+        }
+    ]
+    
+    empaques_prueba = [
+        {
+            'nombre': 'Bolsa',
+            'peso_kg': 0.05,
+            'cantidad': 2
+        }
+    ]
+    
+    balance = calcular_balance_masa(materias_prueba, empaques_prueba)
+    
+    assert balance['entradas']['materias_primas_kg'] == 10.0
+    assert balance['entradas']['empaques_materias_primas_kg'] == 0.1
+    assert balance['entradas']['empaques_producto_kg'] == 0.1  # 0.05 kg × 2 unidades
+    assert balance['entradas']['total_entradas_kg'] == 10.2
+
+def test_validar_datos_completos():
+    """Test para validación de datos completos"""
+    materias_prueba = [
+        {
+            'producto': 'Trigo',
+            'cantidad_real_kg': 0.0,  # Error: cantidad debe ser > 0
+            'transportes': [
+                {
+                    'distancia_km': 100.0,
+                    'tipo_transporte': ''  # Error: transporte requerido
+                }
+            ]
+        }
+    ]
+    
+    errores = validar_datos_completos(materias_prueba, [])
+    assert len(errores) == 2  # Debe encontrar 2 errores
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
