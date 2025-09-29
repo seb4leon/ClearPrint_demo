@@ -6,6 +6,7 @@ Sistema con unidades, transporte individual y balance de masa real
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from utils.calculos import (
     calcular_emisiones_materias_primas,
     calcular_emisiones_empaques,
@@ -14,7 +15,9 @@ from utils.calculos import (
     calcular_emisiones_energia,
     calcular_emisiones_agua,
     calcular_emisiones_residuos,
-    exportar_resultados_excel
+    exportar_resultados_excel,
+    obtener_factor,
+    calcular_emisiones_uso_fin_vida
 )
 from utils.units import convertir_unidad, formatear_numero, obtener_unidades_disponibles
 
@@ -39,25 +42,27 @@ def inicializar_session_state():
         },
         'materias_primas': [],
         'empaques': [],
-        'transportes_materias_primas': [],  # Nuevo: transporte individual
-        'transportes_empaques': [],        # Nuevo: transporte individual
+        'transportes_materias_primas': [],
+        'transportes_empaques': [],
         'produccion': {
             'energia_kwh': 0.0,
             'tipo_energia': 'Red eléctrica promedio',
             'agua_m3': 0.0,
-            'residuos_produccion': []  # Nuevo: residuos por elemento
+            'residuos_produccion': []
         },
         'distribucion': {
-            'canales': []  # Nuevo: para fase 2
+            'canales': []
         },
         'retail': {
-            # Placeholder para fase 2
+            'dias_almacenamiento': 7,
+            'tipo_almacenamiento': 'temperatura_ambiente',
+            'consumo_energia_kwh': 0.0
         },
         'uso_fin_vida': {
             'energia_uso_kwh': 0.0,
-            'duracion_uso_anios': 1,
             'agua_uso_m3': 0.0,
-            'gestion_fin_vida': []  # Nuevo: gestión por elemento
+            'gestion_fin_vida': [],
+            'emisiones': None
         }
     }
     
@@ -1307,315 +1312,1006 @@ elif pagina == "6. Producción y Mermas":
         consumo_total_kwh = st.session_state.produccion['energia_kwh']
         st.metric("Consumo energía", f"{formatear_numero(consumo_total_kwh)} kWh")
 
-# Página 7: Distribución (SIMPLIFICADA - Actualización automática)
+# Página 7: Distribución (REDISEÑADA - Robustecida)
 elif pagina == "7. Distribución":
     st.title("7. Distribución del Producto")
-    st.info("🚚 Define los canales de distribución y el transporte del producto terminado")
+    st.info("🚚 Define los canales de distribución en 2 pasos simples")
     
-    # Verificar datos previos necesarios
-    if not st.session_state.producto.get('nombre'):
-        st.warning("⚠️ Primero define un producto en la página 1")
+    # Verificación básica
+    if not st.session_state.producto.get('nombre') or st.session_state.producto.get('peso_neto_kg', 0) <= 0:
+        st.warning("⚠️ Primero define un producto con peso en la página 1")
         st.stop()
     
     peso_producto_kg = st.session_state.producto.get('peso_neto_kg', 0)
-    if peso_producto_kg <= 0:
-        st.warning("⚠️ El producto debe tener un peso neto mayor a 0")
-        st.stop()
     
-    # Inicializar estructura de distribución
+    # INICIALIZACIÓN ROBUSTA
     if 'canales' not in st.session_state.distribucion:
-        st.session_state.distribucion['canales'] = [{'nombre': '', 'porcentaje': 100.0, 'rutas': [{}]}]
+        st.session_state.distribucion['canales'] = [{'nombre': 'Canal Principal', 'porcentaje': 100.0, 'rutas': [{}]}]
+    
+    # Garantizar lista no vacía
+    if not st.session_state.distribucion['canales']:
+        st.session_state.distribucion['canales'] = [{'nombre': 'Canal Principal', 'porcentaje': 100.0, 'rutas': [{}]}]
     
     opciones_transporte = list(obtener_opciones_categoria('transporte'))
     
-    with st.form("distribucion_form"):
-        st.subheader("📦 Configuración de Canales de Distribución")
+    # --- PASO 1: CONFIGURACIÓN BÁSICA (FUERA DEL FORM) ---
+    st.subheader("📋 Paso 1: Configuración Básica de Canales")
+    
+    with st.container():
+        col_p1, col_p2 = st.columns(2)
         
-        # Número de canales (actualización automática como en páginas anteriores)
-        num_canales = st.number_input(
-            "**¿Cuántos canales de distribución diferentes tiene el producto?**",
-            min_value=1,
-            max_value=10,
-            value=len(st.session_state.distribucion['canales']),
-            help="Ej: Venta online, Tienda física, Exportación, etc.",
-            key="num_canales_input"
-        )
+        with col_p1:
+            # Control simple de número de canales
+            num_canales_actual = len(st.session_state.distribucion['canales'])
+            nuevo_num_canales = st.number_input(
+                "**Número de canales de distribución**",
+                min_value=1,
+                max_value=5,  # Reducido para mayor estabilidad
+                value=num_canales_actual,
+                key="num_canales_control",
+                help="Máximo 5 canales para mejor rendimiento"
+            )
         
-        # ACTUALIZACIÓN AUTOMÁTICA (sin botón) - igual que en páginas 2, 3, 4, 5
-        if len(st.session_state.distribucion['canales']) != num_canales:
-            if num_canales > len(st.session_state.distribucion['canales']):
-                # Agregar nuevos canales
-                nuevos_canales = [{'nombre': f'Canal {i+1}', 'porcentaje': 0.0, 'rutas': [{}]} 
-                                for i in range(len(st.session_state.distribucion['canales']), num_canales)]
-                st.session_state.distribucion['canales'].extend(nuevos_canales)
-                
-                # Recalcular porcentajes equitativamente
-                if st.session_state.distribucion['canales']:
-                    porcentaje_por_canal = 100.0 / len(st.session_state.distribucion['canales'])
-                    for canal in st.session_state.distribucion['canales']:
-                        canal['porcentaje'] = porcentaje_por_canal
-            else:
-                # Reducir canales (mantener los primeros)
-                st.session_state.distribucion['canales'] = st.session_state.distribucion['canales'][:num_canales]
+        with col_p2:
+            if st.button("🔄 Aplicar número de canales", type="secondary"):
+                if nuevo_num_canales != num_canales_actual:
+                    # Actualización CONTROLADA y EXPLÍCITA
+                    if nuevo_num_canales > num_canales_actual:
+                        # Agregar nuevos canales
+                        for i in range(num_canales_actual, nuevo_num_canales):
+                            st.session_state.distribucion['canales'].append({
+                                'nombre': f'Canal {i+1}', 
+                                'porcentaje': 0.0, 
+                                'rutas': [{}]
+                            })
+                    else:
+                        # Reducir canales (con confirmación para datos importantes)
+                        canales_con_rutas = [c for c in st.session_state.distribucion['canales'] 
+                                           if any(r.get('origen') for r in c.get('rutas', []))]
+                        
+                        if nuevo_num_canales < len(canales_con_rutas):
+                            st.warning(f"⚠️ Al reducir a {nuevo_num_canales} canales, se perderán datos de {len(canales_con_rutas) - nuevo_num_canales} canales con rutas configuradas.")
+                            if st.button("✅ Confirmar reducción (pérdida de datos)", type="primary"):
+                                st.session_state.distribucion['canales'] = st.session_state.distribucion['canales'][:nuevo_num_canales]
+                                st.rerun()
+                        else:
+                            st.session_state.distribucion['canales'] = st.session_state.distribucion['canales'][:nuevo_num_canales]
+                            st.rerun()
         
+        # Configuración simple de porcentajes (FUERA del form principal)
+        st.write("**Distribución porcentual por canal:**")
         porcentaje_total = 0.0
         
-        # Configurar cada canal
         for i in range(len(st.session_state.distribucion['canales'])):
-            canal = st.session_state.distribucion['canales'][i]
-            
-            with st.expander(f"**Canal de Distribución {i+1}**", expanded=True):
-                col_c1, col_c2, col_c3 = st.columns([3, 2, 2])
-                
-                with col_c1:
-                    # Nombre del canal
-                    nuevo_nombre = st.text_input(
-                        f"Nombre del canal",
-                        value=canal.get('nombre', f'Canal {i+1}'),
-                        placeholder="Ej: Venta Online, Tienda Física, Exportación...",
-                        key=f"nombre_canal_{i}"
-                    )
-                    canal['nombre'] = nuevo_nombre
-                
-                with col_c2:
-                    # Porcentaje de distribución
-                    nuevo_porcentaje = st.number_input(
-                        f"Porcentaje de distribución (%)",
-                        min_value=0.0,
-                        max_value=100.0,
-                        value=float(canal.get('porcentaje', 0.0)),
-                        step=1.0,
-                        format="%.1f",
-                        key=f"porcentaje_input_{i}"
-                    )
-                    canal['porcentaje'] = nuevo_porcentaje
-                    porcentaje_total += nuevo_porcentaje
-                
-                with col_c3:
-                    # Calcular y mostrar peso distribuido
-                    peso_distribuido_kg = (peso_producto_kg * nuevo_porcentaje) / 100
-                    canal['peso_distribuido_kg'] = peso_distribuido_kg
-                    st.metric(
-                        "Peso distribuido", 
-                        f"{formatear_numero(peso_distribuido_kg)} kg"
-                    )
-                
-                # CONFIGURACIÓN DE RUTAS PARA ESTE CANAL
-                st.write("**Rutas de transporte para este canal:**")
-                
-                # Número de rutas (actualización automática)
-                if 'rutas' not in canal:
-                    canal['rutas'] = [{}]
-                
-                num_rutas = st.number_input(
-                    f"¿Cuántas rutas de transporte tiene este canal?",
-                    min_value=1,
-                    max_value=5,
-                    value=len(canal['rutas']),
-                    key=f"num_rutas_{i}"
+            col_perc1, col_perc2 = st.columns([3, 1])
+            with col_perc1:
+                nombre = st.text_input(
+                    f"Nombre canal {i+1}",
+                    value=st.session_state.distribucion['canales'][i].get('nombre', f'Canal {i+1}'),
+                    key=f"nombre_simple_{i}"
                 )
-                
-                # ACTUALIZACIÓN AUTOMÁTICA de rutas (sin botón)
-                if len(canal['rutas']) != num_rutas:
-                    if num_rutas > len(canal['rutas']):
-                        # Agregar nuevas rutas
-                        nuevas_rutas = [{} for _ in range(num_rutas - len(canal['rutas']))]
-                        canal['rutas'].extend(nuevas_rutas)
-                    else:
-                        # Reducir rutas
-                        canal['rutas'] = canal['rutas'][:num_rutas]
-                
-                # Configurar cada ruta (SIN AUTOCOMPLETADO)
-                for j in range(len(canal['rutas'])):
-                    ruta = canal['rutas'][j]
+                st.session_state.distribucion['canales'][i]['nombre'] = nombre
+            
+            with col_perc2:
+                porcentaje = st.number_input(
+                    f"% Canal {i+1}",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=float(st.session_state.distribucion['canales'][i].get('porcentaje', 0.0)),
+                    step=1.0,
+                    format="%.1f",
+                    key=f"porcentaje_simple_{i}"
+                )
+                st.session_state.distribucion['canales'][i]['porcentaje'] = porcentaje
+                porcentaje_total += porcentaje
+        
+        # Validación básica de porcentajes
+        col_val1, col_val2 = st.columns(2)
+        with col_val1:
+            st.metric("Suma porcentajes", f"{porcentaje_total:.1f}%")
+        with col_val2:
+            if abs(porcentaje_total - 100.0) < 0.1:
+                st.success("✅ Suma correcta")
+            else:
+                st.error("❌ Ajusta los porcentajes")
+    
+    st.markdown("---")
+    
+    # --- PASO 2: CONFIGURACIÓN DETALLADA (DENTRO DEL FORM) ---
+    st.subheader("🚚 Paso 2: Configuración de Rutas de Transporte")
+    
+    with st.form("distribucion_detallada"):
+        # Solo procesar si los porcentajes son correctos
+        if abs(porcentaje_total - 100.0) > 0.1:
+            st.error("❌ Primero ajusta los porcentajes en el Paso 1")
+            st.form_submit_button("💾 Guardar Configuración", disabled=True)
+        else:
+            # Configuración detallada por canal
+            for i, canal in enumerate(st.session_state.distribucion['canales']):
+                with st.expander(f"**{canal['nombre']}** - {canal['porcentaje']:.1f}%", expanded=i==0):
+                    # Calcular peso distribuido
+                    peso_distribuido = (peso_producto_kg * canal['porcentaje']) / 100
+                    canal['peso_distribuido_kg'] = peso_distribuido
                     
-                    with st.container():
+                    st.write(f"**Peso a distribuir:** {formatear_numero(peso_distribuido)} kg")
+                    
+                    # Configuración de rutas para este canal
+                    if 'rutas' not in canal:
+                        canal['rutas'] = [{}]
+                    
+                    # Control simple de número de rutas
+                    num_rutas_actual = len(canal['rutas'])
+                    num_rutas = st.number_input(
+                        f"Número de rutas para {canal['nombre']}",
+                        min_value=1,
+                        max_value=3,  # Limitado para rendimiento
+                        value=num_rutas_actual,
+                        key=f"num_rutas_{i}"
+                    )
+                    
+                    # Ajustar número de rutas (sin auto-actualización)
+                    if num_rutas != num_rutas_actual:
+                        if st.button(f"🔄 Aplicar {num_rutas} rutas para {canal['nombre']}", key=f"aplicar_rutas_{i}"):
+                            if num_rutas > num_rutas_actual:
+                                canal['rutas'].extend([{} for _ in range(num_rutas - num_rutas_actual)])
+                            else:
+                                canal['rutas'] = canal['rutas'][:num_rutas]
+                            st.rerun()
+                    
+                    # Configurar cada ruta (SIN AUTORELLENADO)
+                    for j, ruta in enumerate(canal['rutas']):
                         st.write(f"**Ruta {j+1}**")
                         col_r1, col_r2, col_r3, col_r4 = st.columns([2, 2, 1, 1])
                         
                         with col_r1:
-                            # ORIGEN SIMPLE - sin autocompletado
-                            nuevo_origen = st.text_input(
-                                f"Origen",
+                            origen = st.text_input(
+                                "Origen",
                                 value=ruta.get('origen', ''),
-                                placeholder="Ej: Fábrica, Centro distribución, Puerto",
+                                placeholder="Ingresa origen manualmente",
                                 key=f"origen_{i}_{j}"
                             )
-                            ruta['origen'] = nuevo_origen
+                            ruta['origen'] = origen
                         
                         with col_r2:
-                            # DESTINO SIMPLE - sin autocompletado
-                            nuevo_destino = st.text_input(
-                                f"Destino",
+                            destino = st.text_input(
+                                "Destino", 
                                 value=ruta.get('destino', ''),
-                                placeholder="Ej: Cliente, Tienda, Almacén, Puerto destino",
+                                placeholder="Ingresa destino manualmente",
                                 key=f"destino_{i}_{j}"
                             )
-                            ruta['destino'] = nuevo_destino
+                            ruta['destino'] = destino
                         
                         with col_r3:
-                            nueva_distancia = st.number_input(
-                                f"Distancia (km)",
+                            distancia = st.number_input(
+                                "Distancia (km)",
                                 min_value=0.0,
                                 value=float(ruta.get('distancia_km', 0.0)),
-                                step=1.0,
-                                format="%.1f",
                                 key=f"distancia_{i}_{j}"
                             )
-                            ruta['distancia_km'] = nueva_distancia
+                            ruta['distancia_km'] = distancia
                         
                         with col_r4:
-                            transporte_actual = ruta.get('tipo_transporte', 'Camión diesel')
-                            indice_transporte = opciones_transporte.index(transporte_actual) if transporte_actual in opciones_transporte else 0
-                            
-                            nuevo_transporte = st.selectbox(
-                                f"Transporte",
+                            transporte = st.selectbox(
+                                "Transporte",
                                 options=opciones_transporte,
-                                index=indice_transporte,
+                                index=0,
                                 key=f"transporte_{i}_{j}"
                             )
-                            ruta['tipo_transporte'] = nuevo_transporte
+                            ruta['tipo_transporte'] = transporte
                         
-                        # La carga se calcula automáticamente
-                        ruta['carga_kg'] = peso_distribuido_kg
-        
-        # VALIDACIÓN Y CÁLCULOS
-        st.subheader("📊 Validación de Distribución")
-        
-        col_v1, col_v2, col_v3 = st.columns(3)
-        with col_v1:
-            st.metric("Porcentaje total", f"{porcentaje_total:.1f}%")
-        with col_v2:
-            st.metric("Peso producto total", f"{formatear_numero(peso_producto_kg)} kg")
-        
-        # Validación de porcentajes
-        diferencia_porcentaje = abs(porcentaje_total - 100.0)
-        with col_v3:
-            if diferencia_porcentaje < 0.1:
-                st.metric("Validación", "✅ Correcto")
-                submit_disabled = False
-            else:
-                st.metric("Validación", "❌ Incorrecto")
-                submit_disabled = True
-        
-        if diferencia_porcentaje > 0.1:
-            st.error(f"⚠️ La suma de porcentajes debe ser 100%. Actual: {porcentaje_total:.1f}%")
-            st.info("💡 Ajusta los porcentajes para que sumen exactamente 100%")
-        
-        # Cálculo de emisiones estimadas (solo si la validación es correcta)
-        if not submit_disabled:
-            st.subheader("📈 Emisiones Estimadas de Distribución")
+                        ruta['carga_kg'] = peso_distribuido
             
-            emisiones_totales = 0
-            for i, canal in enumerate(st.session_state.distribucion['canales']):
-                if canal.get('nombre') and canal.get('rutas'):
-                    emisiones_canal = 0
-                    for ruta in canal['rutas']:
-                        if ruta.get('distancia_km', 0) > 0 and ruta.get('tipo_transporte'):
-                            factor = next((f for f in factores.to_dict('records') 
-                                         if f['category'] == 'transporte' and f['item'] == ruta['tipo_transporte']), None)
-                            if factor:
-                                carga_ton = ruta.get('carga_kg', 0) / 1000
-                                emisiones_ruta = ruta['distancia_km'] * carga_ton * factor['factor_kgCO2e_per_unit']
-                                emisiones_canal += emisiones_ruta
-                    
-                    emisiones_totales += emisiones_canal
-                    
-                    if emisiones_canal > 0:
-                        st.metric(
-                            f"Emisiones {canal['nombre']}", 
-                            f"{formatear_numero(emisiones_canal)} kg CO₂e"
-                        )
-            
-            if emisiones_totales > 0:
-                st.success(f"**Emisiones totales de distribución: {formatear_numero(emisiones_totales)} kg CO₂e**")
-        
-        # BOTÓN DE GUARDADO
-        if st.form_submit_button("💾 **Guardar Configuración**", disabled=submit_disabled, type="primary"):
-            st.success("✅ **Configuración de distribución guardada correctamente**")
+            # Botón de guardado final
+            if st.form_submit_button("💾 **Guardar Configuración Completa**", type="primary"):
+                st.success("✅ **Configuración de distribución guardada correctamente**")
     
-    # RESUMEN FINAL
+    # --- RESUMEN FINAL ---
     st.markdown("---")
-    st.subheader("📋 Resumen de Distribución")
+    st.subheader("📊 Resumen de Distribución")
     
-    if st.session_state.distribucion['canales']:
-        datos_resumen = []
-        for canal in st.session_state.distribucion['canales']:
-            if canal.get('nombre'):
-                rutas_validas = [r for r in canal.get('rutas', []) if r.get('origen')]
-                distancia_total = sum(r.get('distancia_km', 0) for r in rutas_validas)
-                
-                datos_resumen.append({
-                    'Canal': canal['nombre'],
-                    'Porcentaje': f"{canal['porcentaje']:.1f}%",
-                    'Peso Distribuido': f"{formatear_numero(canal.get('peso_distribuido_kg', 0))} kg",
-                    'Rutas Configuradas': len(rutas_validas),
-                    'Distancia Total': f"{formatear_numero(distancia_total)} km"
-                })
-        
-        if datos_resumen:
-            df_resumen = pd.DataFrame(datos_resumen)
-            st.dataframe(df_resumen, use_container_width=True)
-            
-            # Estadísticas generales
-            total_rutas = sum(len([r for r in c.get('rutas', []) if r.get('origen')]) 
-                            for c in st.session_state.distribucion['canales'])
-            total_distancia = sum(sum(r.get('distancia_km', 0) for r in c.get('rutas', []) 
-                                  if r.get('origen')) for c in st.session_state.distribucion['canales'])
-            
-            col_stats1, col_stats2, col_stats3 = st.columns(3)
-            with col_stats1:
-                st.metric("Total canales", len(datos_resumen))
-            with col_stats2:
-                st.metric("Total rutas", total_rutas)
-            with col_stats3:
-                st.metric("Distancia total", f"{formatear_numero(total_distancia)} km")
+    # Cálculo de emisiones para el resumen
+    emisiones_totales = 0
+    datos_resumen = []
     
+    for canal in st.session_state.distribucion['canales']:
+        if canal.get('nombre'):
+            rutas_validas = [r for r in canal.get('rutas', []) if r.get('origen')]
+            distancia_total = sum(r.get('distancia_km', 0) for r in rutas_validas)
+            
+            # Calcular emisiones para este canal
+            emisiones_canal = 0
+            for ruta in rutas_validas:
+                if ruta.get('distancia_km', 0) > 0:
+                    factor = next((f for f in factores.to_dict('records') 
+                                 if f['category'] == 'transporte' and f['item'] == ruta['tipo_transporte']), None)
+                    if factor:
+                        carga_ton = ruta.get('carga_kg', 0) / 1000
+                        emisiones_canal += ruta['distancia_km'] * carga_ton * factor['factor_kgCO2e_per_unit']
+            
+            emisiones_totales += emisiones_canal
+            
+            datos_resumen.append({
+                'Canal': canal['nombre'],
+                'Porcentaje': f"{canal['porcentaje']:.1f}%",
+                'Peso': f"{formatear_numero(canal.get('peso_distribuido_kg', 0))} kg",
+                'Rutas': len(rutas_validas),
+                'Distancia': f"{formatear_numero(distancia_total)} km",
+                'Emisiones': f"{formatear_numero(emisiones_canal)} kg CO₂e"
+            })
+    
+    if datos_resumen:
+        df_resumen = pd.DataFrame(datos_resumen)
+        st.dataframe(df_resumen, use_container_width=True)
+        st.success(f"**Emisiones totales estimadas: {formatear_numero(emisiones_totales)} kg CO₂e**")
+    
+# Página 8: Retail
 elif pagina == "8. Retail":
-    st.title("8. Retail y Almacenamiento")
-    st.warning("🔄 **PÁGINA EN DESARROLLO - FASE 2**")
-    st.info("""
-    **Próximamente en FASE 2:**
-    - Tiempo en retail
-    - Consumos energéticos (refrigeración)
-    - Pérdidas en punto de venta
-    - Gestión de residuos retail
-    """)
+    st.title("8. Almacenamiento en Retail")
+    st.info("🏪 Define las condiciones de almacenamiento del producto en el punto de venta")
+    
+    # Verificación básica de datos previos
+    if not st.session_state.producto.get('nombre'):
+        st.warning("⚠️ Primero define un producto en la página 1")
+        st.stop()
+    
+    # Inicializar estructura de retail si no existe
+    if 'retail' not in st.session_state:
+        st.session_state.retail = {}
+        
+    # Inicializar valores por defecto si no existen
+    if 'dias_almacenamiento' not in st.session_state.retail:
+        st.session_state.retail['dias_almacenamiento'] = 7
+    if 'tipo_almacenamiento' not in st.session_state.retail:
+        st.session_state.retail['tipo_almacenamiento'] = 'temperatura_ambiente'
+    if 'consumo_energia_kwh' not in st.session_state.retail:
+        st.session_state.retail['consumo_energia_kwh'] = 0.0
+    
+    # Definir opciones simples de almacenamiento
+    opciones_almacenamiento = {
+        'temperatura_ambiente': {
+            'nombre': 'Temperatura ambiente (estante)',
+            'factor_energia': 0.1  # kWh por día (iluminación básica)
+        },
+        'congelado': {
+            'nombre': 'Congelado/Refrigerado',
+            'factor_energia': 0.8  # kWh por día (refrigeración/congelación)
+        }
+    }
+    
+    with st.form("retail_form"):
+        st.subheader("📦 Condiciones de Almacenamiento en Retail")
+        
+        # 1. Tiempo en retail
+        dias = st.number_input(
+            "**¿Cuántos días permanece el producto en el punto de venta?**",
+            min_value=1,
+            max_value=365,
+            value=st.session_state.retail['dias_almacenamiento'],
+            help="Tiempo estimado desde que llega al retail hasta la venta"
+        )
+        
+        # 2. Tipo de almacenamiento
+        tipo_almacenamiento = st.radio(
+            "**¿En qué condiciones se almacena el producto?**",
+            options=[opt['nombre'] for opt in opciones_almacenamiento.values()],
+            index=0
+        )
+        
+        # Identificar tipo seleccionado
+        tipo_key = [k for k, v in opciones_almacenamiento.items() 
+                   if v['nombre'] == tipo_almacenamiento][0]
+        
+        # Campo de consumo energético personalizado para refrigeración/congelación
+        consumo_personalizado = None
+        if tipo_key == 'congelado':
+            consumo_sugerido = opciones_almacenamiento[tipo_key]['factor_energia'] * dias
+            st.info(f"💡 Consumo sugerido: {formatear_numero(consumo_sugerido)} kWh por día")
+            
+            consumo_personalizado = st.number_input(
+                "**Consumo energético diario (kWh/día)**",
+                min_value=0.0,
+                value=consumo_sugerido,
+                help="Puede ajustar el consumo según las condiciones específicas del retail"
+            )
+        
+        if st.form_submit_button("💾 Guardar Configuración"):
+            st.session_state.retail.update({
+                'dias_almacenamiento': dias,
+                'tipo_almacenamiento': tipo_key,
+                'consumo_energia_kwh': (consumo_personalizado or opciones_almacenamiento[tipo_key]['factor_energia']) * dias
+            })
+            
+            # Calcular emisiones por consumo eléctrico
+            try:
+                factor_electricidad = obtener_factor(factores, 'energia', 'electricidad')
+                emisiones = st.session_state.retail['consumo_energia_kwh'] * factor_electricidad
+                st.session_state.retail['emisiones_estimadas'] = emisiones
+            except Exception as e:
+                st.error(f"Error al calcular emisiones: {str(e)}")
+                st.session_state.retail['emisiones_estimadas'] = 0.0
+            
+            st.success("✅ Configuración guardada correctamente")
+    
+    # Mostrar resumen si hay datos
+    if st.session_state.retail.get('emisiones_estimadas'):
+        st.markdown("---")
+        st.subheader("📊 Resumen")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(
+                "Días en retail",
+                f"{st.session_state.retail['dias_almacenamiento']} días"
+            )
+        with col2:
+            st.metric(
+                "Consumo total",
+                f"{formatear_numero(st.session_state.retail['consumo_energia_kwh'])} kWh"
+            )
+        with col3:
+            st.metric(
+                "Emisiones estimadas",
+                f"{formatear_numero(st.session_state.retail['emisiones_estimadas'])} kg CO₂e"
+            )
     
 elif pagina == "9. Uso y Fin de Vida":
     st.title("9. Uso y Fin de Vida")
-    st.warning("🔄 **PÁGINA EN DESARROLLO - FASE 2**")
-    st.info("""
-    **Próximamente en FASE 2:**
-    - Consumo durante uso mejorado
-    - Gestión individual por elemento
-    - Transporte a gestión final
-    - Balance de masa completo
-    """)
+    st.info("🔄 Define los consumos durante el uso del producto y la gestión final de empaques")
+    
+    # Verificación básica de datos previos
+    if not st.session_state.producto.get('nombre'):
+        st.warning("⚠️ Primero define un producto en la página 1")
+        st.stop()
+    
+    if not st.session_state.empaques or not any(emp.get('nombre') for emp in st.session_state.empaques):
+        st.warning("⚠️ Primero define los empaques del producto en la página 3")
+        st.stop()
+    
+    # Inicializar estructura si no existe
+    if 'uso_fin_vida' not in st.session_state:
+        st.session_state.uso_fin_vida = {
+            'tiene_consumos': False,
+            'consumo_energia_kwh': 0.0,
+            'consumo_agua_m3': 0.0,
+            'tiempo_vida_util': 1.0,
+            'gestion_empaques': []
+        }
+    
+    # Sección 1: Consumos Durante Uso
+    st.subheader("🔌 Consumos Durante Uso")
+    
+    tiene_consumos = st.checkbox(
+        "¿El producto requiere agua o energía para su uso/consumo?",
+        value=st.session_state.uso_fin_vida.get('tiene_consumos', False),
+        help="Por ejemplo: productos que requieren refrigeración, cocción, lavado, etc."
+    )
+    
+    if tiene_consumos:
+        with st.form("form_consumos_uso"):
+            st.markdown("#### 📊 Configuración de Consumos")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                energia = st.number_input(
+                    "Consumo energético por uso (kWh)",
+                    min_value=0.0,
+                    value=st.session_state.uso_fin_vida.get('energia_uso_kwh', 0.0),
+                    help="Energía consumida en cada uso del producto",
+                    key="energia_uso"
+                )
+                
+            with col2:
+                agua = st.number_input(
+                    "Consumo de agua por uso (m³)",
+                    min_value=0.0,
+                    value=st.session_state.uso_fin_vida.get('agua_uso_m3', 0.0),
+                    help="Agua consumida en cada uso del producto",
+                    key="agua_uso"
+                )
+                
+            with col3:
+                tiempo = st.number_input(
+                    "Tiempo de vida útil (años)",
+                    min_value=0.1,
+                    value=st.session_state.uso_fin_vida.get('tiempo_vida_util', 1.0),
+                    help="Duración estimada del producto",
+                    key="tiempo_vida"
+                )
+            
+            # Calcular emisiones preliminares
+            emisiones_energia = calcular_emisiones_energia(energia, 'electricidad', factores)
+            emisiones_agua = calcular_emisiones_agua(agua, factores)
+            emisiones_totales = emisiones_energia + emisiones_agua
+            
+            # Mostrar estimación de emisiones
+            st.markdown("#### 📈 Estimación de Emisiones")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Emisiones por energía", 
+                         f"{formatear_numero(emisiones_energia)} kg CO₂e")
+            with col2:
+                st.metric("Emisiones por agua", 
+                         f"{formatear_numero(emisiones_agua)} kg CO₂e")
+            
+            submitted = st.form_submit_button("💾 Guardar Consumos", 
+                                           use_container_width=True)
+            
+            if submitted:
+                st.session_state.uso_fin_vida.update({
+                    'tiene_consumos': True,
+                    'energia_uso_kwh': energia,
+                    'agua_uso_m3': agua,
+                    'tiempo_vida_util': tiempo,
+                    'emisiones_uso': emisiones_totales
+                })
+                st.success("✅ Consumos guardados correctamente")
+    else:
+        st.session_state.uso_fin_vida['tiene_consumos'] = False
+    
+    # Sección 2: Gestión de Empaques Post-Consumo
+    st.markdown("---")
+    st.subheader("♻️ Gestión de Empaques Post-Consumo")
+    
+    opciones_gestion = ['Vertedero', 'Incineracion', 'Compostaje', 'Reciclaje']
+    opciones_transporte = list(obtener_opciones_categoria('transporte'))
+    
+    with st.form("gestion_empaques_form"):
+        st.markdown("#### 📦 Configuración de Fin de Vida")
+        gestion_empaques = []
+        emisiones_totales_fin_vida = 0
+        
+        for i, empaque in enumerate(st.session_state.empaques):
+            if not empaque.get('nombre'):
+                continue
+            
+            with st.expander(f"**{empaque['nombre']}** ({empaque.get('material', 'Material no especificado')})", expanded=True):
+                # Buscar si ya existe gestión para este empaque
+                gestion_existente = next((g for g in st.session_state.uso_fin_vida.get('gestion_empaques', [])
+                                        if g.get('id_empaque') == i), None)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # CORRECCIÓN: Manejar índice de gestión existente
+                    gestion_actual = gestion_existente.get('tipo_gestion', 'Vertedero') if gestion_existente else 'Vertedero'
+                    indice_gestion = opciones_gestion.index(gestion_actual) if gestion_actual in opciones_gestion else 0
+                    
+                    gestion = st.selectbox(
+                        f"**Gestión para {empaque['nombre']}**",
+                        options=opciones_gestion,
+                        index=indice_gestion,
+                        key=f"gestion_fin_vida_{i}"
+                    )
+                
+                with col2:
+                    # Transporte de residuos
+                    distancia = st.number_input(
+                        f"**Distancia transporte (km)**",
+                        min_value=0.0,
+                        value=gestion_existente.get('distancia_km', 0.0) if gestion_existente else 0.0,
+                        step=1.0,
+                        format="%.1f",
+                        key=f"distancia_fin_vida_{i}"
+                    )
+                    
+                    # CORRECCIÓN: Manejar índice de transporte existente
+                    transporte_actual = gestion_existente.get('tipo_transporte', 'Camión diesel') if gestion_existente else 'Camión diesel'
+                    indice_transporte = opciones_transporte.index(transporte_actual) if transporte_actual in opciones_transporte else 0
+                    
+                    transporte = st.selectbox(
+                        f"**Transporte**",
+                        options=opciones_transporte,
+                        index=indice_transporte,
+                        key=f"transporte_fin_vida_{i}"
+                    )
+                
+                # Preparar datos para cálculo de emisiones
+                porcentajes = {
+                    'porcentaje_vertedero': 100 if gestion == 'Vertedero' else 0,
+                    'porcentaje_incineracion': 100 if gestion == 'Incineracion' else 0,
+                    'porcentaje_compostaje': 100 if gestion == 'Compostaje' else 0,
+                    'porcentaje_reciclaje': 100 if gestion == 'Reciclaje' else 0
+                }
+                
+                # Calcular emisiones
+                peso = empaque.get('peso_kg', 0)
+                emisiones = calcular_emisiones_residuos(peso, factores, porcentajes)
+                emisiones_totales_fin_vida += emisiones
+                
+                # Mostrar emisiones estimadas
+                st.info(f"Emisiones estimadas: {formatear_numero(emisiones)} kg CO₂e")
+                
+                # Guardar datos de gestión
+                gestion_empaques.append({
+                    'id_empaque': i,
+                    'nombre_empaque': empaque['nombre'],
+                    'material': empaque.get('material', ''),
+                    'peso_kg': peso,
+                    'tipo_gestion': gestion,
+                    'distancia_km': distancia,
+                    'tipo_transporte': transporte,
+                    'emisiones': emisiones
+                })
+        
+        # Botón de guardar y resumen
+        st.markdown("---")
+        st.subheader("📊 Resumen de Gestión")
+        
+        # Mostrar métricas de resumen
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Empaques gestionados", len(gestion_empaques))
+        with col2:
+            total_residuos_kg = sum(g['peso_kg'] for g in gestion_empaques)
+            st.metric("Peso total", f"{formatear_numero(total_residuos_kg)} kg")
+        with col3:
+            st.metric("Emisiones totales", f"{formatear_numero(emisiones_totales_fin_vida)} kg CO₂e")
+        
+        # Botón de guardar
+        if st.form_submit_button("💾 Guardar Configuración de Fin de Vida", type="primary", use_container_width=True):
+            st.session_state.uso_fin_vida['gestion_empaques'] = gestion_empaques
+            st.session_state.uso_fin_vida['emisiones_fin_vida'] = emisiones_totales_fin_vida
+            st.success("✅ Configuración de fin de vida guardada correctamente")
+    
+    # Mostrar resumen si hay datos
+    if st.session_state.uso_fin_vida.get('emisiones'):
+        st.markdown("---")
+        st.subheader("📊 Resumen de Emisiones")
+        
+        emisiones = st.session_state.uso_fin_vida['emisiones']
+        desglose = emisiones['desglose']
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric(
+                "Emisiones Totales",
+                f"{formatear_numero(emisiones['total'])} kg CO₂e"
+            )
+            
+            if desglose['uso']['energia'] > 0 or desglose['uso']['agua'] > 0:
+                st.markdown("##### Emisiones durante uso:")
+                if desglose['uso']['energia'] > 0:
+                    st.markdown(f"- Energía: {formatear_numero(desglose['uso']['energia'])} kg CO₂e")
+                if desglose['uso']['agua'] > 0:
+                    st.markdown(f"- Agua: {formatear_numero(desglose['uso']['agua'])} kg CO₂e")
+        
+        with col2:
+            if desglose['fin_vida']:
+                st.markdown("##### Emisiones por fin de vida:")
+                for empaque, datos in desglose['fin_vida'].items():
+                    st.markdown(f"**{empaque}**")
+                    st.markdown(f"- Peso: {formatear_numero(datos['peso_kg'])} kg")
+                    st.markdown(f"- Emisiones: {formatear_numero(datos['emisiones'])} kg CO₂e")
+                    with st.expander("Ver distribución"):
+                        for tipo, porcentaje in datos['porcentajes'].items():
+                            st.markdown(f"- {tipo.replace('porcentaje_', '').title()}: {porcentaje}%")
+        st.markdown("---")
+        st.subheader("📈 Resumen")
+        
+        # Resumen de consumos
+        if st.session_state.uso_fin_vida['tiene_consumos']:
+            col_c1, col_c2, col_c3 = st.columns(3)
+            with col_c1:
+                st.metric(
+                    "Consumo energético total",
+                    f"{formatear_numero(st.session_state.uso_fin_vida['consumo_energia_kwh'] * st.session_state.uso_fin_vida['tiempo_vida_util'])} kWh"
+                )
+            with col_c2:
+                st.metric(
+                    "Consumo agua total",
+                    f"{formatear_numero(st.session_state.uso_fin_vida['consumo_agua_m3'] * st.session_state.uso_fin_vida['tiempo_vida_util'])} m³"
+                )
+            with col_c3:
+                st.metric(
+                    "Tiempo de vida",
+                    f"{formatear_numero(st.session_state.uso_fin_vida['tiempo_vida_util'])} años"
+                )
+        
+        # Resumen de gestión de empaques
+        st.write("**Gestión de Empaques:**")
+        for gestion in st.session_state.uso_fin_vida['gestion_empaques']:
+            st.info(
+                f"**{gestion['empaque']}**: {gestion['tipo_gestion']} a {formatear_numero(gestion['distancia_km'])} km "
+                f"por {gestion['tipo_transporte']}"
+            )
     
 elif pagina == "10. Resultados":
     st.title("10. Resultados de Huella de Carbono")
-    st.warning("🔄 **PÁGINA EN DESARROLLO - FASE 2**")
-    st.info("""
-    **Próximamente en FASE 2:**
-    - Cálculos completos con nueva estructura
-    - Trazabilidad individual por material
-    - Balance de masa detallado
-    - Reporte de coherencia de datos
+    
+    # Verificar que existe un producto
+    if not st.session_state.producto.get('nombre'):
+        st.warning("⚠️ Primero define un producto en la página 1")
+        st.stop()
+        
+    # 1. RESUMEN EJECUTIVO
+    st.header("📊 Resumen Ejecutivo")
+    st.markdown("""
+    Esta sección presenta un análisis completo de la huella de carbono de su producto,
+    desglosando las emisiones por etapa del ciclo de vida y fuentes específicas.
+    Los resultados se presentan en orden descendente, desde la visión global hasta el detalle específico.
     """)
     
-    # Mostrar datos actuales para prueba
-    if st.session_state.producto['nombre']:
-        st.subheader("📊 Datos Actuales (FASE 1)")
+    # Verificar y obtener valores de session_state de manera segura
+    materias_primas = st.session_state.get('materias_primas', [])
+    empaques = st.session_state.get('empaques', [])
+    produccion = st.session_state.get('produccion', {})
+    distribucion = st.session_state.get('distribucion', {})
+    retail = st.session_state.get('retail', {})
+    uso_fin_vida = st.session_state.get('uso_fin_vida', {})
+    
+    # Recopilar datos de emisiones por etapa con manejo seguro
+    emisiones_etapas = {
+        'Materias Primas': sum(mp.get('emisiones_totales', 0) for mp in materias_primas if mp and mp.get('producto')),
+        'Empaques': sum(emp.get('emisiones_totales', 0) for emp in empaques if emp and emp.get('nombre')),
+        'Producción': produccion.get('emisiones_totales', 0),
+        'Distribución': distribucion.get('emisiones_totales', 0),
+        'Retail': retail.get('emisiones_estimadas', 0),
+        'Uso y Fin de Vida': uso_fin_vida.get('emisiones_totales', 0)
+    }
+    
+    # Asegurar que todas las emisiones sean valores float
+    emisiones_totales = float(sum(float(v) for v in emisiones_etapas.values()))
+    
+    # 1.1 Métricas principales
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Huella Total", f"{formatear_numero(emisiones_totales)} kg CO₂e")
+    with col2:
+        # Obtener valores de manera segura
+        unidades = st.session_state.producto.get('unidades', 1)
+        unidad_funcional = st.session_state.producto.get('unidad_funcional', 'unidad')
+        # Evitar división por cero
+        emisiones_por_unidad = emisiones_totales / unidades if unidades > 0 else 0
+        st.metric("Por unidad funcional", 
+                 f"{formatear_numero(emisiones_por_unidad)} kg CO₂e/{unidad_funcional}")
+    with col3:
+        # Asegurarse de que hay emisiones antes de buscar el máximo
+        if emisiones_totales > 0:
+            etapa_mayor = max(emisiones_etapas.items(), key=lambda x: x[1])
+            st.metric("Etapa crítica", f"{etapa_mayor[0]} ({formatear_numero(etapa_mayor[1])} kg CO₂e)")
+        else:
+            st.metric("Etapa crítica", "Sin datos")
+    
+    # 1.2 Gráficos de emisiones por etapa
+    st.subheader("Emisiones por Etapa del Ciclo de Vida")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        fig_etapas_bar = go.Figure(data=[
+            go.Bar(x=list(emisiones_etapas.keys()),
+                   y=list(emisiones_etapas.values()),
+                   text=[f"{formatear_numero(v)} kg CO₂e" for v in emisiones_etapas.values()],
+                   textposition='auto')
+        ])
+        fig_etapas_bar.update_layout(
+            title="Distribución de Emisiones por Etapa",
+            xaxis_title="Etapa",
+            yaxis_title="kg CO₂e",
+            showlegend=False
+        )
+        st.plotly_chart(fig_etapas_bar, use_container_width=True)
+    
+    with col2:
+        fig_etapas_pie = go.Figure(data=[
+            go.Pie(labels=list(emisiones_etapas.keys()),
+                  values=list(emisiones_etapas.values()),
+                  text=[f"{(v/emisiones_totales)*100:.1f}%" if emisiones_totales > 0 else "0%" for v in emisiones_etapas.values()],
+                  textinfo='percent+label',
+                  hole=.3)
+        ])
+        fig_etapas_pie.update_layout(
+            title="Distribución Porcentual de Emisiones por Etapa"
+        )
+        st.plotly_chart(fig_etapas_pie, use_container_width=True)
+    
+    # 1.3 Tabla resumen
+    df_etapas = pd.DataFrame({
+        'Etapa': emisiones_etapas.keys(),
+        'Emisiones (kg CO₂e)': [formatear_numero(v) for v in emisiones_etapas.values()],
+        'Porcentaje': [f"{(v/emisiones_totales)*100:.1f}%" for v in emisiones_etapas.values()]
+    })
+    st.dataframe(df_etapas, use_container_width=True)
+    
+    # 2. ANÁLISIS POR ETAPA
+    st.markdown("---")
+    st.header("🔍 Análisis Detallado por Etapa")
+    st.markdown("""
+    Esta sección desglosa cada etapa del ciclo de vida, mostrando las principales
+    fuentes de emisión y oportunidades de mejora dentro de cada una.
+    """)
+    
+    # 2.1 Materias Primas
+    with st.expander("📦 Materias Primas", expanded=True):
+        if st.session_state.materias_primas:
+            mp_data = []
+            for mp in st.session_state.materias_primas:
+                if mp.get('producto'):
+                    mp_data.append({
+                        'Material': mp['producto'],
+                        'Cantidad': f"{formatear_numero(mp['cantidad_teorica'])} {mp['unidad_teorica']}",
+                        'Emisiones Producción': formatear_numero(mp.get('emisiones_produccion', 0)),
+                        'Emisiones Transporte': formatear_numero(mp.get('emisiones_transporte', 0)),
+                        'Emisiones Totales': formatear_numero(mp.get('emisiones_totales', 0))
+                    })
+            
+            df_mp = pd.DataFrame(mp_data)
+            st.dataframe(df_mp, use_container_width=True)
+            
+            # Gráficos de emisiones por material
+            try:
+                emisiones_totales_mp = pd.to_numeric(df_mp['Emisiones Totales'], errors='coerce')
+                if emisiones_totales_mp.sum() > 0:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Gráfico de barras
+                        fig_mp_bar = go.Figure(data=[
+                            go.Bar(x=df_mp['Material'],
+                                  y=emisiones_totales_mp,
+                                  text=[f"{formatear_numero(v)} kg CO₂e" for v in emisiones_totales_mp],
+                                  textposition='auto')
+                        ])
+                        fig_mp_bar.update_layout(
+                            title="Emisiones por Material",
+                            xaxis_title="Material",
+                            yaxis_title="kg CO₂e",
+                            showlegend=False
+                        )
+                        st.plotly_chart(fig_mp_bar, use_container_width=True)
+                    
+                    with col2:
+                        # Gráfico de torta
+                        fig_mp_pie = go.Figure(data=[
+                            go.Pie(labels=df_mp['Material'],
+                                  values=emisiones_totales_mp,
+                                  text=[f"{(v/emisiones_totales_mp.sum())*100:.1f}%" for v in emisiones_totales_mp],
+                                  textinfo='percent+label',
+                                  hole=.3)
+                        ])
+                        fig_mp_pie.update_layout(
+                            title="Distribución Porcentual por Material"
+                        )
+                        st.plotly_chart(fig_mp_pie, use_container_width=True)
+                else:
+                    st.info("No hay emisiones registradas para materias primas")
+            except Exception as e:
+                st.warning(f"No se pudo generar el gráfico de materias primas: {str(e)}")
+    
+    # 2.2 Empaques
+    with st.expander("📦 Empaques", expanded=True):
+        if st.session_state.empaques:
+            emp_data = []
+            for emp in st.session_state.empaques:
+                if emp.get('nombre'):
+                    emp_data.append({
+                        'Empaque': emp['nombre'],
+                        'Material': emp['material'],
+                        'Peso': f"{formatear_numero(emp['peso_kg'])} kg",
+                        'Emisiones Producción': formatear_numero(emp.get('emisiones_produccion', 0)),
+                        'Emisiones Transporte': formatear_numero(emp.get('emisiones_transporte', 0)),
+                        'Emisiones Totales': formatear_numero(emp.get('emisiones_totales', 0))
+                    })
+            
+            df_emp = pd.DataFrame(emp_data)
+            st.dataframe(df_emp, use_container_width=True)
+            
+            # Gráficos de emisiones por empaque
+            try:
+                emisiones_prod = pd.to_numeric(df_emp['Emisiones Producción'], errors='coerce')
+                emisiones_trans = pd.to_numeric(df_emp['Emisiones Transporte'], errors='coerce')
+                emisiones_totales = pd.to_numeric(df_emp['Emisiones Totales'], errors='coerce')
+                
+                if (emisiones_prod.sum() + emisiones_trans.sum()) > 0:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Gráfico de barras apiladas
+                        fig_emp_bar = go.Figure(data=[
+                            go.Bar(name='Producción',
+                                  x=df_emp['Empaque'],
+                                  y=emisiones_prod,
+                                  text=[f"{formatear_numero(v)} kg CO₂e" for v in emisiones_prod],
+                                  textposition='auto'),
+                            go.Bar(name='Transporte',
+                                  x=df_emp['Empaque'],
+                                  y=emisiones_trans,
+                                  text=[f"{formatear_numero(v)} kg CO₂e" for v in emisiones_trans],
+                                  textposition='auto')
+                        ])
+                        fig_emp_bar.update_layout(
+                            barmode='stack',
+                            title="Emisiones por Tipo de Empaque",
+                            xaxis_title="Empaque",
+                            yaxis_title="kg CO₂e"
+                        )
+                        st.plotly_chart(fig_emp_bar, use_container_width=True)
+                    
+                    with col2:
+                        # Gráfico de torta para distribución porcentual
+                        total_emisiones_emp = emisiones_totales.sum()
+                        if total_emisiones_emp > 0:
+                            fig_emp_pie = go.Figure(data=[
+                                go.Pie(labels=df_emp['Empaque'],
+                                      values=emisiones_totales,
+                                      text=[f"{(v/total_emisiones_emp)*100:.1f}%" for v in emisiones_totales],
+                                      textinfo='percent+label',
+                                      hole=.3)
+                            ])
+                            fig_emp_pie.update_layout(
+                                title="Distribución Porcentual por Empaque"
+                            )
+                            st.plotly_chart(fig_emp_pie, use_container_width=True)
+                else:
+                    st.info("No hay emisiones registradas para empaques")
+            except Exception as e:
+                st.warning(f"No se pudo generar el gráfico de empaques: {str(e)}")
+    
+    # 3. ANÁLISIS DE TRANSPORTE
+    st.markdown("---")
+    st.header("🚚 Análisis de Transporte")
+    st.markdown("""
+    Esta sección consolida todas las emisiones relacionadas con el transporte a lo largo
+    de la cadena de valor, permitiendo identificar las rutas y medios de transporte más
+    significativos en términos de emisiones.
+    """)
+    
+    # Recopilar datos de transporte de todas las etapas
+    transportes = []
+    
+    # Materias primas
+    for mp in st.session_state.materias_primas:
+        if mp.get('transportes'):
+            for t in mp['transportes']:
+                if t.get('origen') and t.get('destino'):
+                    transportes.append({
+                        'Etapa': 'Materias Primas',
+                        'Material': mp['producto'],
+                        'Origen': t['origen'],
+                        'Destino': t['destino'],
+                        'Distancia': t['distancia_km'],
+                        'Medio': t['tipo_transporte'],
+                        'Emisiones': t.get('emisiones', 0)
+                    })
+    
+    # Empaques
+    for emp in st.session_state.empaques:
+        if emp.get('transportes'):
+            for t in emp['transportes']:
+                if t.get('origen') and t.get('destino'):
+                    transportes.append({
+                        'Etapa': 'Empaques',
+                        'Material': emp['nombre'],
+                        'Origen': t['origen'],
+                        'Destino': t['destino'],
+                        'Distancia': t['distancia_km'],
+                        'Medio': t['tipo_transporte'],
+                        'Emisiones': t.get('emisiones', 0)
+                    })
+    
+    # Distribución
+    for canal in st.session_state.distribucion.get('canales', []):
+        if canal.get('rutas'):
+            for ruta in canal['rutas']:
+                if ruta.get('origen') and ruta.get('destino'):
+                    transportes.append({
+                        'Etapa': 'Distribución',
+                        'Material': f"Canal {canal['nombre']}",
+                        'Origen': ruta['origen'],
+                        'Destino': ruta['destino'],
+                        'Distancia': ruta['distancia_km'],
+                        'Medio': ruta['tipo_transporte'],
+                        'Emisiones': ruta.get('emisiones', 0)
+                    })
+    
+    if transportes:
+        df_transportes = pd.DataFrame(transportes)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Producto", st.session_state.producto['nombre'])
-            st.metric("Materias primas", len([mp for mp in st.session_state.materias_primas if mp.get('producto')]))
+        # 3.1 Tabla de transportes
+        st.dataframe(df_transportes, use_container_width=True)
         
-        with col2:
-            st.metric("Empaques", len([emp for emp in st.session_state.empaques if emp.get('nombre')]))
-            st.metric("Unidad funcional", st.session_state.producto['unidad_funcional'])
+        # 3.2 Gráficos de emisiones por medio de transporte
+        emisiones_por_medio = df_transportes.groupby('Medio')['Emisiones'].sum().reset_index()
+        
+        try:
+            emisiones = pd.to_numeric(emisiones_por_medio['Emisiones'], errors='coerce')
+            if emisiones.sum() > 0:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Gráfico de barras
+                    fig_trans_bar = go.Figure(data=[
+                        go.Bar(x=emisiones_por_medio['Medio'],
+                              y=emisiones,
+                              text=[f"{formatear_numero(v)} kg CO₂e" for v in emisiones],
+                              textposition='auto')
+                    ])
+                    fig_trans_bar.update_layout(
+                        title="Emisiones por Medio de Transporte",
+                        xaxis_title="Medio de Transporte",
+                        yaxis_title="kg CO₂e",
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig_trans_bar, use_container_width=True)
+                
+                with col2:
+                    # Gráfico de torta
+                    fig_trans_pie = go.Figure(data=[
+                        go.Pie(labels=emisiones_por_medio['Medio'],
+                              values=emisiones,
+                              text=[f"{(v/emisiones.sum())*100:.1f}%" for v in emisiones],
+                              textinfo='percent+label',
+                              hole=.3)
+                    ])
+                    fig_trans_pie.update_layout(
+                        title="Distribución Porcentual por Medio de Transporte"
+                    )
+                    st.plotly_chart(fig_trans_pie, use_container_width=True)
+                
+                # Agregamos una tabla de resumen con los porcentajes
+                st.markdown("### Resumen de Emisiones por Medio de Transporte")
+                df_resumen_trans = pd.DataFrame({
+                    'Medio de Transporte': emisiones_por_medio['Medio'],
+                    'Emisiones (kg CO₂e)': [formatear_numero(v) for v in emisiones],
+                    'Porcentaje (%)': [f"{(v/emisiones.sum())*100:.1f}%" for v in emisiones]
+                })
+                st.dataframe(df_resumen_trans, use_container_width=True)
+            else:
+                st.info("No hay emisiones registradas para transporte")
+        except Exception as e:
+            st.warning(f"No se pudo generar el gráfico de transporte: {str(e)}")
+        
+        # 3.3 Mapa de rutas (si se implementa después)
+        st.info("🗺️ El mapa interactivo de rutas estará disponible en próximas actualizaciones")
+    
+    # 4. OPORTUNIDADES DE MEJORA
+    st.markdown("---")
+    st.header("💡 Oportunidades de Mejora")
+    st.markdown("""
+    Basado en el análisis de los datos, se identifican las siguientes áreas 
+    con mayor potencial de reducción de emisiones:
+    """)
+    
+    # Convertir emisiones_totales a float
+    total_emisiones_float = float(emisiones_totales)
+    
+    # Identificar principales fuentes de emisión
+    fuentes_lista = [
+        (etapa, float(emisiones))
+        for etapa, emisiones in emisiones_etapas.items()
+    ]
+    
+    principales_fuentes = sorted(
+        fuentes_lista,
+        key=lambda x: x[1],
+        reverse=True
+    )[:3]
+    
+    for etapa, emisiones in principales_fuentes:
+        if total_emisiones_float > 0:
+            porcentaje = (emisiones/total_emisiones_float) * 100
+        else:
+            porcentaje = 0.0
+        st.markdown(f"**{etapa}** ({formatear_numero(emisiones)} kg CO₂e, {porcentaje:.1f}%)")
+
+        if etapa == "Materias Primas":
+            st.markdown("- Considerar materiales alternativos con menor huella de carbono")
+            st.markdown("- Optimizar las cantidades utilizadas")
+            st.markdown("- Buscar proveedores más cercanos")
+        elif etapa == "Transporte":
+            st.markdown("- Optimizar rutas de transporte")
+            st.markdown("- Considerar medios de transporte más eficientes")
+            st.markdown("- Consolidar envíos")
+        elif etapa == "Uso y Fin de Vida":
+            st.markdown("- Mejorar la eficiencia energética del producto")
+            st.markdown("- Optimizar el diseño para reciclaje")
+            st.markdown("- Considerar materiales más fáciles de reciclar")
+    
+    # 5. DATOS DE REFERENCIA
+    st.markdown("---")
+    st.header("📈 Comparativa con Referencias")
+    st.info("La comparativa con productos similares y benchmarks de la industria estará disponible en próximas actualizaciones")
 
 # Información sobre factores
 st.sidebar.markdown("---")

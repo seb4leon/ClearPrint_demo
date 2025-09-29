@@ -211,12 +211,12 @@ def calcular_emisiones_residuos(masa_kg, factores_df, distribucion_fin_vida=None
         
         # Compostaje
         factor_compostaje = obtener_factor(factores_df, 'residuo', item='Compostaje')
-        emisiones_compostaje = (masa_kg * distribucion_fin_vida['porcentaje_compostado'] / 100 * 
+        emisiones_compostaje = (masa_kg * distribucion_fin_vida['porcentaje_compostaje'] / 100 * 
                               factor_compostaje)
         
         # Reciclaje
         factor_reciclaje = obtener_factor(factores_df, 'residuo', item='Reciclaje')
-        emisiones_reciclaje = (masa_kg * distribucion_fin_vida['porcentaje_reciclado'] / 100 * 
+        emisiones_reciclaje = (masa_kg * distribucion_fin_vida['porcentaje_reciclaje'] / 100 * 
                              factor_reciclaje)
         
         total_emisiones = (emisiones_vertedero + emisiones_incineracion + 
@@ -507,3 +507,125 @@ def validar_distribucion(distribucion_data):
         
     except Exception as e:
         return False, f"Error en validación: {str(e)}"
+    
+def calcular_emisiones_uso_fin_vida(uso_fin_vida_data, factores_df):
+    """
+    Calcula emisiones de la etapa de uso y fin de vida del producto
+    
+    Args:
+        uso_fin_vida_data (dict): Diccionario con datos de uso y fin de vida
+            - energia_uso_kwh (float): Consumo energético durante uso
+            - agua_uso_m3 (float): Consumo de agua durante uso
+            - gestion_empaques (list): Lista de diccionarios con información de gestión de empaques
+                - empaque (str): Nombre del empaque
+                - peso_kg (float): Peso del empaque
+                - porcentajes (dict): Porcentajes de cada tipo de gestión
+        factores_df (DataFrame): DataFrame con factores de emisión
+    
+    Returns:
+        tuple: (emisiones_totales, desglose)
+            - emisiones_totales (float): Total de emisiones en kg CO2e
+            - desglose (dict): Desglose de emisiones por fuente y etapa
+    """
+    emisiones_totales = 0.0
+    desglose = {
+        'uso': {
+            'energia': 0.0,
+            'agua': 0.0
+        },
+        'fin_vida': {}
+    }
+    
+    try:
+        # 1. Emisiones durante uso
+        if uso_fin_vida_data.get('energia_uso_kwh', 0) > 0:
+            emisiones_energia = calcular_emisiones_energia(
+                uso_fin_vida_data['energia_uso_kwh'],
+                'electricidad',
+                factores_df
+            )
+            emisiones_totales += emisiones_energia
+            desglose['uso']['energia'] = emisiones_energia
+        
+        if uso_fin_vida_data.get('agua_uso_m3', 0) > 0:
+            emisiones_agua = calcular_emisiones_agua(
+                uso_fin_vida_data['agua_uso_m3'],
+                factores_df
+            )
+            emisiones_totales += emisiones_agua
+            desglose['uso']['agua'] = emisiones_agua
+        
+        # 2. Emisiones por gestión de fin de vida
+        for empaque in uso_fin_vida_data.get('gestion_empaques', []):
+            if not empaque or not empaque.get('peso_kg') or not empaque.get('porcentajes'):
+                continue
+                
+            emisiones_empaque = calcular_emisiones_residuos(
+                empaque['peso_kg'],
+                factores_df,
+                empaque['porcentajes']
+            )
+            
+            emisiones_totales += emisiones_empaque
+            desglose['fin_vida'][empaque['empaque']] = {
+                'peso_kg': empaque['peso_kg'],
+                'emisiones': emisiones_empaque,
+                'porcentajes': empaque['porcentajes']
+            }
+        
+        return emisiones_totales, desglose
+        
+    except Exception as e:
+        raise Exception(f"Error en cálculo de emisiones de uso y fin de vida: {str(e)}")
+
+def calcular_emisiones_retail(retail_data, factores_df):
+    """
+    Calcula emisiones de la etapa de retail
+    
+    Args:
+        retail_data (dict): Diccionario con datos de retail
+            - dias_almacenamiento (int): Días en retail
+            - tipo_almacenamiento (str): 'temperatura_ambiente' o 'congelado'
+            - consumo_energia_kwh (float): Consumo energético total
+        factores_df (DataFrame): DataFrame con factores de emisión
+    
+    Returns:
+        tuple: (emisiones_totales, desglose)
+            - emisiones_totales (float): Total de emisiones en kg CO2e
+            - desglose (dict): Desglose de emisiones por fuente
+    """
+    try:
+        if not retail_data:
+            return 0.0, {}
+            
+        emisiones_totales = 0.0
+        desglose = {}
+        
+        # Obtener consumo energético
+        consumo_kwh = retail_data.get('consumo_energia_kwh', 0)
+        
+        if consumo_kwh > 0:
+            # Obtener factor de emisión para electricidad
+            factor_energia = obtener_factor(
+                factores_df, 
+                'energia', 
+                'electricidad'
+            )
+            
+            # Calcular emisiones
+            emisiones = consumo_kwh * factor_energia
+            emisiones_totales += emisiones
+            desglose['Energía Retail'] = emisiones
+            
+            # Agregar detalles al desglose
+            desglose['Detalles'] = {
+                'días_almacenamiento': retail_data.get('dias_almacenamiento', 0),
+                'tipo_almacenamiento': retail_data.get('tipo_almacenamiento', ''),
+                'consumo_kwh': consumo_kwh,
+                'factor_energia': factor_energia
+            }
+        
+        return emisiones_totales, desglose
+        
+    except Exception as e:
+        raise Exception(f"Error en cálculo de emisiones retail: {str(e)}")
