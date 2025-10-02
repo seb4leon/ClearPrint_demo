@@ -2011,315 +2011,597 @@ elif pagina == "10. Resultados":
         st.warning("⚠️ Primero define un producto en la página 1")
         st.stop()
     
-    # Importar la función de cálculo completo que creamos
-    from utils.calculos import calcular_emisiones_totales_completas
+    # Importar las funciones de cálculo
+    from utils.calculos import (
+        calcular_emisiones_totales_completas, 
+        calcular_emisiones_detalladas_completas,
+        obtener_detalle_materias_primas_mejorado,
+        obtener_detalle_transporte_mejorado
+    )
     
     # BOTÓN PARA CALCULAR - IMPLEMENTACIÓN CORRECTA
     st.subheader("🧮 Ejecutar Cálculos Completos")
     
-    if st.button("🔄 Calcular Huella de Carbono Completa", type="primary", use_container_width=True):
-        try:
-            with st.spinner("Calculando huella de carbono para todas las etapas..."):
-                # Validar datos mínimos
-                if not st.session_state.materias_primas or not any(mp.get('producto') for mp in st.session_state.materias_primas):
-                    st.error("❌ Debe ingresar al menos una materia prima en la página 2")
-                else:
-                    # Ejecutar cálculos COMPLETOS usando la nueva función
-                    emisiones_totales, desglose_completo = calcular_emisiones_totales_completas(st.session_state, factores)
-                    
-                    # Guardar resultados en session_state
-                    st.session_state.resultados_calculados = {
-                        'emisiones_totales': emisiones_totales,
-                        'desglose': desglose_completo,
-                        'fecha_calculo': pd.Timestamp.now(),
-                        'producto_nombre': st.session_state.producto['nombre'],
-                        'peso_producto_kg': st.session_state.producto.get('peso_neto_kg', 0)
-                    }
-                    
-                    st.success(f"✅ Cálculos completados: {formatear_numero(emisiones_totales, 4)} kg CO₂e")
-                    
-        except Exception as e:
-            st.error(f"❌ Error en los cálculos: {str(e)}")
-            st.info("💡 Verifica que todos los datos estén completos en las páginas anteriores")
+    col_calc1, col_calc2 = st.columns([2, 1])
+    with col_calc1:
+        if st.button("🔄 Calcular Huella de Carbono Completa", type="primary", use_container_width=True):
+            try:
+                with st.spinner("Calculando huella de carbono para todas las etapas..."):
+                    # Validar datos mínimos
+                    if not st.session_state.materias_primas or not any(mp.get('producto') for mp in st.session_state.materias_primas):
+                        st.error("❌ Debe ingresar al menos una materia prima en la página 2")
+                    else:
+                        # Ejecutar cálculos DETALLADOS usando la nueva función
+                        emisiones_totales, desglose_detallado = calcular_emisiones_detalladas_completas(st.session_state, factores)
+                        
+                        # Guardar resultados en session_state
+                        st.session_state.resultados_calculados = {
+                            'emisiones_totales': emisiones_totales,
+                            'desglose_detallado': desglose_detallado,
+                            'fecha_calculo': pd.Timestamp.now(),
+                            'producto_nombre': st.session_state.producto['nombre'],
+                            'peso_producto_kg': st.session_state.producto.get('peso_neto_kg', 0)
+                        }
+                        
+                        st.success(f"✅ Cálculos completados: {formatear_numero(emisiones_totales, 4)} kg CO₂e")
+                        
+            except Exception as e:
+                st.error(f"❌ Error en los cálculos: {str(e)}")
+                st.info("💡 Verifica que todos los datos estén completos en las páginas anteriores")
+    
+    with col_calc2:
+        if st.button("🗑️ Limpiar Resultados", type="secondary", use_container_width=True):
+            if 'resultados_calculados' in st.session_state:
+                del st.session_state.resultados_calculados
+            st.rerun()
     
     # Mostrar resultados si existen
     if 'resultados_calculados' in st.session_state:
         resultados = st.session_state.resultados_calculados
         emisiones_totales = resultados['emisiones_totales']
-        desglose = resultados['desglose']
+        desglose_detallado = resultados['desglose_detallado']
         peso_producto_kg = resultados['peso_producto_kg']
+        
+        # 0. SUPUESTOS Y METODOLOGÍA
+        st.header("📋 Supuestos y Metodología")
+        
+        with st.expander("🔍 **Ver supuestos de cálculo**", expanded=True):
+            st.markdown("""
+            ### 📊 **Metodología de Cálculo**
+            
+            **Alcance del Estudio:** Cradle-to-Gate (de la cuna a la puerta) + Uso y Fin de Vida
+            
+            **Etapas Incluidas:**
+            - **📦 Materias Primas:** Producción de ingredientes + empaques de materias primas
+            - **📦 Empaques:** Producción de empaques del producto final  
+            - **🚚 Transporte:** Transporte de materias primas y empaques hasta fábrica
+            - **⚡ Procesamiento:** Energía, agua y gestión de mermas en producción
+            - **🚛 Distribución:** Transporte del producto terminado a puntos de venta
+            - **🏪 Retail:** Almacenamiento en puntos de venta
+            - **♻️ Fin de Vida:** Consumos durante uso + gestión de empaques post-consumo
+            
+            **Supuestos Clave:**
+            - Factores de emisión basados en base de datos internacionales
+            - Transporte terrestre considerado como modo principal
+            - Gestión de residuos según tipo especificado (vertedero, reciclaje, etc.)
+            - Consumos energéticos basados en datos ingresados por el usuario
+            - Peso en distribución incluye producto + empaques del producto final
+            """)
         
         # 1. RESUMEN EJECUTIVO
         st.header("📊 Resumen Ejecutivo")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Huella Total", f"{formatear_numero(emisiones_totales, 4)} kg CO₂e")
         with col2:
+            emisiones_g = emisiones_totales * 1000
+            st.metric("Huella Total", f"{formatear_numero(emisiones_g, 4)} g CO₂e")
+        with col3:
             # Calcular por kg de producto
             if peso_producto_kg > 0:
                 emisiones_por_kg = emisiones_totales / peso_producto_kg
                 st.metric("Por kg de producto", f"{formatear_numero(emisiones_por_kg, 4)} kg CO₂e/kg")
             else:
                 st.metric("Por kg de producto", "N/A")
-        with col3:
-            if desglose:
-                etapa_mayor = max(desglose.items(), key=lambda x: x[1])
-                porcentaje = (etapa_mayor[1] / emisiones_totales) * 100 if emisiones_totales > 0 else 0
-                st.metric("Etapa crítica", f"{etapa_mayor[0]} ({porcentaje:.1f}%)")
-        
-        # CONVERSIÓN A g CO2e - NUEVA SECCIÓN
-        st.markdown("---")
-        st.subheader("⚖️ Resultados en Diferentes Unidades")
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total", f"{formatear_numero(emisiones_totales, 4)} kg CO₂e")
-        with col2:
-            emisiones_g = emisiones_totales * 1000
-            st.metric("Total", f"{formatear_numero(emisiones_g, 4)} g CO₂e")
-        with col3:
-            if peso_producto_kg > 0:
-                emisiones_por_kg = emisiones_totales / peso_producto_kg
-                st.metric("Por kg", f"{formatear_numero(emisiones_por_kg, 4)} kg CO₂e/kg")
         with col4:
             if peso_producto_kg > 0:
-                emisiones_por_kg_g = emisiones_por_kg * 1000
-                st.metric("Por kg", f"{formatear_numero(emisiones_por_kg_g, 4)} g CO₂e/kg")
-
-        # 2. GRÁFICOS
-        st.subheader("📈 Distribución de Emisiones por Etapa")
+                emisiones_por_kg_g = (emisiones_totales / peso_producto_kg) * 1000
+                st.metric("Por kg de producto", f"{formatear_numero(emisiones_por_kg_g, 4)} g CO₂e/kg")
         
-        if desglose:
-            # Filtrar etapas con emisiones significativas
-            etapas_significativas = {k: v for k, v in desglose.items() if v > 0.001}
+        # 2. DISTRIBUCIÓN POR ETAPA (GRÁFICOS)
+        st.subheader("📈 Distribución de Huella de Carbono por Etapa")
+        
+        # Preparar datos para gráficos
+        etapas_totales = {
+            'Materias Primas': desglose_detallado['materias_primas']['total'],
+            'Empaques': desglose_detallado['empaques']['total'],
+            'Transporte': desglose_detallado['transporte']['total'],
+            'Procesamiento': desglose_detallado['procesamiento']['total'],
+            'Distribución': desglose_detallado['distribucion']['total'],
+            'Retail': desglose_detallado['retail']['total'],
+            'Fin de Vida': desglose_detallado['fin_vida']['total']
+        }
+        
+        # Filtrar etapas con emisiones significativas
+        etapas_significativas = {k: v for k, v in etapas_totales.items() if v > 0.001}
+        
+        if etapas_significativas:
+            col1, col2 = st.columns(2)
             
-            if etapas_significativas:
-                col1, col2 = st.columns(2)
+            with col1:
+                # Gráfico de barras
+                fig_barras = px.bar(
+                    x=list(etapas_significativas.keys()),
+                    y=list(etapas_significativas.values()),
+                    title="Huella de Carbono por Etapa (kg CO₂e)",
+                    labels={'x': 'Etapa del Ciclo de Vida', 'y': 'kg CO₂e'},
+                    color=list(etapas_significativas.values()),
+                    color_continuous_scale='Viridis'
+                )
+                fig_barras.update_traces(
+                    text=[f"{formatear_numero(v, 4)} kg" for v in etapas_significativas.values()],
+                    textposition='auto'
+                )
+                fig_barras.update_layout(showlegend=False)
+                st.plotly_chart(fig_barras, use_container_width=True)
+            
+            with col2:
+                # Gráfico de torta
+                fig_torta = px.pie(
+                    names=list(etapas_significativas.keys()),
+                    values=list(etapas_significativas.values()),
+                    title="Distribución Porcentual por Etapa",
+                    hole=0.3
+                )
+                fig_torta.update_traces(
+                    textinfo='percent+label',
+                    textposition='inside'
+                )
+                st.plotly_chart(fig_torta, use_container_width=True)
+            
+            # 3. DESGLOSE DETALLADO POR ETAPA
+            st.header("🔍 Desglose Detallado por Etapa del Ciclo de Vida")
+            
+            # MATERIAS PRIMAS
+            with st.expander("📦 **1. Materias Primas**", expanded=True):
+                etapa_mp = desglose_detallado['materias_primas']
+                porcentaje_mp = (etapa_mp['total'] / emisiones_totales * 100) if emisiones_totales > 0 else 0
+                st.metric("Huella Total Materias Primas", 
+                         f"{formatear_numero(etapa_mp['total'], 4)} kg CO₂e ({porcentaje_mp:.1f}%)")
                 
-                with col1:
-                    # Gráfico de barras
-                    fig_barras = px.bar(
-                        x=list(etapas_significativas.keys()),
-                        y=list(etapas_significativas.values()),
-                        title="Huella de Carbono por Etapa (kg CO₂e)",
-                        labels={'x': 'Etapa', 'y': 'kg CO₂e'},
-                        color=list(etapas_significativas.values()),
-                        color_continuous_scale='Viridis'
-                    )
-                    fig_barras.update_traces(
-                        text=[f"{formatear_numero(v, 4)} kg" for v in etapas_significativas.values()],
-                        textposition='auto'
-                    )
-                    fig_barras.update_layout(showlegend=False)
-                    st.plotly_chart(fig_barras, use_container_width=True)
-                
-                with col2:
-                    # Gráfico de torta
-                    fig_torta = px.pie(
-                        names=list(etapas_significativas.keys()),
-                        values=list(etapas_significativas.values()),
-                        title="Distribución Porcentual",
-                        hole=0.3
-                    )
-                    fig_torta.update_traces(
-                        textinfo='percent+label',
-                        textposition='inside'
-                    )
-                    st.plotly_chart(fig_torta, use_container_width=True)
-                
-                # 3. TABLA DETALLADA CON FORMATO MEJORADO
-                st.subheader("📋 Desglose Detallado por Etapa")
-                
-                # Crear DataFrame con todos los datos y formato mejorado
-                datos_tabla = []
-                for etapa, emisiones in desglose.items():
-                    if emisiones > 0.001:  # Solo mostrar etapas significativas
-                        porcentaje = (emisiones / emisiones_totales) * 100
-                        
-                        # Formatear con máximo 4 decimales
-                        emisiones_kg = formatear_numero(emisiones, 4)
-                        emisiones_g = formatear_numero(emisiones * 1000, 4)
-                        
-                        datos_tabla.append({
-                            'Etapa': etapa,
-                            'Huella Carbono (kg CO₂e)': emisiones_kg,
-                            'Huella Carbono (g CO₂e)': emisiones_g,
-                            'Porcentaje (%)': f"{porcentaje:.1f}%"
+                if etapa_mp['fuentes']:
+                    st.subheader("Desglose por Material")
+                    datos_mp = []
+                    for material, datos in etapa_mp['fuentes'].items():
+                        datos_mp.append({
+                            'Material': material,
+                            'Cantidad (kg)': formatear_numero(datos.get('cantidad_kg', 0), 4),
+                            'Huella Material (kg CO₂e)': formatear_numero(datos.get('emisiones_material', 0), 4),
+                            'Huella Empaque MP (kg CO₂e)': formatear_numero(datos.get('emisiones_empaque', 0), 4),
+                            'Total (kg CO₂e)': formatear_numero(datos.get('total', 0), 4)
                         })
-                
-                df_desglose = pd.DataFrame(datos_tabla)
-                df_desglose = df_desglose.sort_values('Huella Carbono (kg CO₂e)', ascending=False)
-                
-                st.dataframe(df_desglose, use_container_width=True)
-                
-                # 4. ANÁLISIS DETALLADO POR ETAPA
-                st.markdown("---")
-                st.header("🔍 Análisis Detallado por Etapa")
-                
-                # Materias Primas
-                with st.expander("📦 Materias Primas", expanded=True):
-                    if 'Materias Primas' in desglose and desglose['Materias Primas'] > 0:
-                        st.metric("Huella Carbono Materias Primas", f"{formatear_numero(desglose['Materias Primas'], 4)} kg CO₂e")
-                        
-                        # Calcular emisiones específicas de MP
-                        try:
-                            from utils.calculos import calcular_emisiones_materias_primas
-                            emisiones_mp, detalle_mp = calcular_emisiones_materias_primas(
-                                st.session_state.materias_primas, factores
-                            )
-                            
-                            if detalle_mp:
-                                st.subheader("Desglose por Material")
-                                mp_data = []
-                                for mp in detalle_mp:
-                                    mp_data.append({
-                                        'Material': mp['producto'],
-                                        'Cantidad (kg)': formatear_numero(mp['cantidad_real_kg'], 4),
-                                        'Huella Carbono (kg CO₂e)': formatear_numero(mp['total'], 4)
-                                    })
-                                df_mp = pd.DataFrame(mp_data)
-                                st.dataframe(df_mp, use_container_width=True)
-                        except Exception as e:
-                            st.info("Detalle de materias primas no disponible")
-                
-                # Transporte
-                with st.expander("🚚 Transporte", expanded=True):
-                    emisiones_transporte_total = (
-                        desglose.get('Transporte MP', 0) + 
-                        desglose.get('Transporte Empaques', 0) +
-                        desglose.get('Distribución', 0)
-                    )
-                    
-                    if emisiones_transporte_total > 0:
-                        st.metric("Huella Carbono Total Transporte", f"{formatear_numero(emisiones_transporte_total, 4)} kg CO₂e")
-                        
-                        # Mostrar componentes del transporte
-                        componentes = []
-                        if desglose.get('Transporte MP', 0) > 0:
-                            componentes.append(f"MP: {formatear_numero(desglose['Transporte MP'], 4)} kg CO₂e")
-                        if desglose.get('Transporte Empaques', 0) > 0:
-                            componentes.append(f"Empaques: {formatear_numero(desglose['Transporte Empaques'], 4)} kg CO₂e")
-                        if desglose.get('Distribución', 0) > 0:
-                            componentes.append(f"Distribución: {formatear_numero(desglose['Distribución'], 4)} kg CO₂e")
-                        
-                        st.write("**Componentes:** " + " | ".join(componentes))
-                
-                # Producción
-                with st.expander("⚡ Producción", expanded=True):
-                    if desglose.get('Producción', 0) > 0:
-                        st.metric("Huella Carbono Producción", f"{formatear_numero(desglose['Producción'], 4)} kg CO₂e")
-                        
-                        # Mostrar datos de producción si existen
-                        produccion_data = st.session_state.get('produccion', {})
-                        if produccion_data.get('energia_kwh', 0) > 0:
-                            st.write(f"- Energía: {formatear_numero(produccion_data['energia_kwh'], 4)} kWh")
-                        if produccion_data.get('agua_m3', 0) > 0:
-                            st.write(f"- Agua: {formatear_numero(produccion_data['agua_m3'], 4)} m³")
-                
-                # 5. RECOMENDACIONES
-                st.markdown("---")
-                st.header("💡 Recomendaciones para Reducción")
-                
-                # Identificar las 3 etapas con mayor impacto
-                etapas_ordenadas = sorted(desglose.items(), key=lambda x: x[1], reverse=True)
-                top_3 = [etapa for etapa in etapas_ordenadas if etapa[1] > 0.001][:3]
-                
-                for i, (etapa, emisiones) in enumerate(top_3, 1):
-                    with st.expander(f"**#{i} - {etapa}** - {formatear_numero(emisiones, 4)} kg CO₂e ({(emisiones/emisiones_totales)*100:.1f}%)", expanded=True):
-                        if "Materias Primas" in etapa:
-                            st.markdown("""
-                            **Acciones recomendadas:**
-                            - 🏭 **Evaluar proveedores locales** para reducir distancias de transporte
-                            - 📊 **Optimizar cantidades** utilizadas para reducir mermas
-                            - 🔄 **Considerar materiales alternativos** con menor huella de carbono
-                            - 🌱 **Priorizar ingredientes de temporada** y locales
-                            """)
-                        elif "Transporte" in etapa:
-                            st.markdown("""
-                            **Acciones recomendadas:**
-                            - 🗺️ **Optimizar rutas** de distribución y recolección
-                            - 🚛 **Consolidar envíos** para mejorar eficiencia de carga
-                            - ⚡ **Evaluar modos de transporte** más eficientes (eléctricos, ferroviario)
-                            - 📦 **Reducir peso** de empaques para disminuir carga transportada
-                            """)
-                        elif "Empaques" in etapa:
-                            st.markdown("""
-                            **Acciones recomendadas:**
-                            - 📉 **Reducir peso** y volumen de empaques
-                            - ♻️ **Usar materiales reciclados** y reciclables
-                            - 🎯 **Diseñar para reciclabilidad** y reutilización
-                            - 🌿 **Considerar materiales biodegradables** o compostables
-                            """)
-                        elif "Producción" in etapa:
-                            st.markdown("""
-                            **Acciones recomendadas:**
-                            - 💡 **Implementar eficiencia energética** en procesos
-                            - ☀️ **Considerar energías renovables** en planta
-                            - ⏰ **Optimizar horarios** de producción para eficiencia
-                            - 🔧 **Mantenimiento preventivo** de equipos
-                            """)
-                        elif "Distribución" in etapa:
-                            st.markdown("""
-                            **Acciones recomendadas:**
-                            - 🚚 **Optimizar logística** de última milla
-                            - 📍 **Consolidar centros** de distribución
-                            - 🌡️ **Mejorar eficiencia** en almacenamiento
-                            - 🔄 **Implementar sistemas** de retorno de empaques
-                            """)
-                        else:
-                            st.markdown("""
-                            **Acciones recomendadas:**
-                            - 📊 **Analizar procesos** específicos de esta etapa
-                            - 🔍 **Identificar puntos** de mayor consumo energético
-                            - 💡 **Implementar mejores prácticas** del sector
-                            - 📈 **Establecer metas** de reducción progresiva
-                            """)
-                
-                # 6. EXPORTACIÓN
-                st.markdown("---")
-                st.subheader("📤 Exportar Resultados")
-                
-                if st.button("💾 Exportar Resultados a Excel", type="secondary"):
-                    try:
-                        from utils.calculos import exportar_resultados_excel
-                        
-                        archivo = exportar_resultados_excel(
-                            st.session_state.producto,
-                            df_desglose,
-                            emisiones_totales,
-                            factores
-                        )
-                        
-                        if archivo:
-                            with open(archivo, "rb") as file:
-                                st.download_button(
-                                    label="📥 Descargar Archivo Excel",
-                                    data=file,
-                                    file_name=f"huella_carbono_{st.session_state.producto['nombre']}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
-                            st.success("✅ Archivo listo para descargar")
-                    except Exception as e:
-                        st.error(f"Error al exportar: {str(e)}")
+                    df_mp = pd.DataFrame(datos_mp)
+                    st.dataframe(df_mp, use_container_width=True)
+                else:
+                    st.info("No hay datos detallados de materias primas")
             
+            # EMPAQUES
+            with st.expander("📦 **2. Empaques del Producto**", expanded=True):
+                etapa_emp = desglose_detallado['empaques']
+                porcentaje_emp = (etapa_emp['total'] / emisiones_totales * 100) if emisiones_totales > 0 else 0
+                st.metric("Huella Total Empaques", 
+                         f"{formatear_numero(etapa_emp['total'], 4)} kg CO₂e ({porcentaje_emp:.1f}%)")
+                
+                if etapa_emp['fuentes']:
+                    st.subheader("Desglose por Empaque")
+                    datos_emp = []
+                    for empaque, datos in etapa_emp['fuentes'].items():
+                        datos_emp.append({
+                            'Empaque': empaque,
+                            'Material': datos.get('material', 'No especificado'),
+                            'Peso (kg)': formatear_numero(datos.get('peso_kg', 0), 4),
+                            'Huella Carbono (kg CO₂e)': formatear_numero(datos.get('emisiones', 0), 4)
+                        })
+                    df_emp = pd.DataFrame(datos_emp)
+                    st.dataframe(df_emp, use_container_width=True)
+                else:
+                    st.info("No hay datos detallados de empaques")
+            
+            # TRANSPORTE
+            with st.expander("🚚 **3. Transporte (MP + Empaques)**", expanded=True):
+                etapa_trans = desglose_detallado['transporte']
+                porcentaje_trans = (etapa_trans['total'] / emisiones_totales * 100) if emisiones_totales > 0 else 0
+                st.metric("Huella Total Transporte", 
+                         f"{formatear_numero(etapa_trans['total'], 4)} kg CO₂e ({porcentaje_trans:.1f}%)")
+                
+                col_t1, col_t2 = st.columns(2)
+                with col_t1:
+                    st.subheader("📦 Transporte Materias Primas")
+                    trans_mp = etapa_trans['fuentes']['materias_primas']
+                    st.metric("Huella MP", f"{formatear_numero(trans_mp['emisiones'], 4)} kg CO₂e")
+                    
+                    if trans_mp['detalle']:
+                        datos_trans_mp = []
+                        for item in trans_mp['detalle']:
+                            if 'producto' in item:
+                                for ruta in item.get('rutas', []):
+                                    datos_trans_mp.append({
+                                        'Material': item['producto'],
+                                        'Ruta': f"{ruta.get('origen', '')} → {ruta.get('destino', '')}",
+                                        'Distancia (km)': formatear_numero(ruta.get('distancia_km', 0), 1),
+                                        'Transporte': ruta.get('tipo_transporte', 'No especificado'),
+                                        'Huella (kg CO₂e)': formatear_numero(ruta.get('emisiones', 0), 4)
+                                    })
+                        if datos_trans_mp:
+                            df_trans_mp = pd.DataFrame(datos_trans_mp)
+                            st.dataframe(df_trans_mp, use_container_width=True)
+                        else:
+                            st.info("No hay rutas detalladas de transporte MP")
+                
+                with col_t2:
+                    st.subheader("📦 Transporte Empaques")
+                    trans_emp = etapa_trans['fuentes']['empaques']
+                    st.metric("Huella Empaques", f"{formatear_numero(trans_emp['emisiones'], 4)} kg CO₂e")
+                    
+                    if trans_emp['detalle']:
+                        datos_trans_emp = []
+                        for item in trans_emp['detalle']:
+                            if 'nombre' in item:
+                                for ruta in item.get('rutas', []):
+                                    datos_trans_emp.append({
+                                        'Empaque': item['nombre'],
+                                        'Ruta': f"{ruta.get('origen', '')} → {ruta.get('destino', '')}",
+                                        'Distancia (km)': formatear_numero(ruta.get('distancia_km', 0), 1),
+                                        'Transporte': ruta.get('tipo_transporte', 'No especificado'),
+                                        'Huella (kg CO₂e)': formatear_numero(ruta.get('emisiones', 0), 4)
+                                    })
+                        if datos_trans_emp:
+                            df_trans_emp = pd.DataFrame(datos_trans_emp)
+                            st.dataframe(df_trans_emp, use_container_width=True)
+                        else:
+                            st.info("No hay rutas detalladas de transporte empaques")
+            
+            # PROCESAMIENTO
+            with st.expander("⚡ **4. Procesamiento (Producción)**", expanded=True):
+                etapa_proc = desglose_detallado['procesamiento']
+                porcentaje_proc = (etapa_proc['total'] / emisiones_totales * 100) if emisiones_totales > 0 else 0
+                st.metric("Huella Total Procesamiento", 
+                         f"{formatear_numero(etapa_proc['total'], 4)} kg CO₂e ({porcentaje_proc:.1f}%)")
+                
+                if etapa_proc['fuentes']:
+                    datos_proc = []
+                    # Procesar fuentes de energía
+                    if 'Energía Producción' in etapa_proc['fuentes']:
+                        datos_proc.append({
+                            'Fuente': 'Energía Eléctrica',
+                            'Tipo': 'Electricidad de red',
+                            'Consumo': f"{formatear_numero(st.session_state.produccion.get('energia_kwh', 0), 4)} kWh",
+                            'Huella Carbono (kg CO₂e)': formatear_numero(etapa_proc['fuentes']['Energía Producción'], 4)
+                        })
+                    
+                    # Procesar fuentes de agua
+                    if 'Agua Producción' in etapa_proc['fuentes']:
+                        datos_proc.append({
+                            'Fuente': 'Agua',
+                            'Tipo': 'Agua potable',
+                            'Consumo': f"{formatear_numero(st.session_state.produccion.get('agua_m3', 0), 4)} m³",
+                            'Huella Carbono (kg CO₂e)': formatear_numero(etapa_proc['fuentes']['Agua Producción'], 4)
+                        })
+                    
+                    # Procesar gestión de mermas
+                    emisiones_mermas_total = sum(
+                        v for k, v in etapa_proc['fuentes'].items() 
+                        if k.startswith('Merma') and isinstance(v, (int, float))
+                    )
+                    if emisiones_mermas_total > 0:
+                        datos_proc.append({
+                            'Fuente': 'Gestión de Mermas',
+                            'Tipo': 'Residuos de producción',
+                            'Consumo': '-',
+                            'Huella Carbono (kg CO₂e)': formatear_numero(emisiones_mermas_total, 4)
+                        })
+                    
+                    if datos_proc:
+                        df_proc = pd.DataFrame(datos_proc)
+                        st.dataframe(df_proc, use_container_width=True)
+                    else:
+                        st.info("No hay datos detallados de procesamiento")
+                else:
+                    st.info("No hay datos de procesamiento")
+            
+            # DISTRIBUCIÓN
+            with st.expander("🚛 **5. Distribución**", expanded=True):
+                etapa_dist = desglose_detallado['distribucion']
+                porcentaje_dist = (etapa_dist['total'] / emisiones_totales * 100) if emisiones_totales > 0 else 0
+                st.metric("Huella Total Distribución", 
+                         f"{formatear_numero(etapa_dist['total'], 4)} kg CO₂e ({porcentaje_dist:.1f}%)")
+                
+                if etapa_dist['fuentes']:
+                    datos_dist = []
+                    for canal, datos in etapa_dist['fuentes'].items():
+                        if canal.startswith('Distribución '):
+                            nombre_canal = canal.replace('Distribución ', '')
+                            datos_dist.append({
+                                'Canal': nombre_canal,
+                                'Porcentaje': f"{st.session_state.distribucion['canales'][0].get('porcentaje', 0):.1f}%",
+                                'Huella Carbono (kg CO₂e)': formatear_numero(datos, 4)
+                            })
+                    
+                    if datos_dist:
+                        df_dist = pd.DataFrame(datos_dist)
+                        st.dataframe(df_dist, use_container_width=True)
+                    else:
+                        st.info("No hay datos detallados de distribución")
+                else:
+                    st.info("No hay datos de distribución")
+            
+            # RETAIL
+            with st.expander("🏪 **6. Retail**", expanded=True):
+                etapa_retail = desglose_detallado['retail']
+                porcentaje_retail = (etapa_retail['total'] / emisiones_totales * 100) if emisiones_totales > 0 else 0
+                st.metric("Huella Total Retail", 
+                         f"{formatear_numero(etapa_retail['total'], 4)} kg CO₂e ({porcentaje_retail:.1f}%)")
+                
+                if etapa_retail['fuentes']:
+                    for fuente, datos in etapa_retail['fuentes'].items():
+                        if fuente == 'Energía Retail':
+                            st.write(f"**Energía para almacenamiento:**")
+                            st.write(f"- Consumo: {formatear_numero(st.session_state.retail.get('consumo_energia_kwh', 0), 4)} kWh")
+                            st.write(f"- Días almacenamiento: {st.session_state.retail.get('dias_almacenamiento', 0)} días")
+                            st.write(f"- Tipo almacenamiento: {st.session_state.retail.get('tipo_almacenamiento', 'No especificado')}")
+                            st.write(f"- Huella carbono: {formatear_numero(datos, 4)} kg CO₂e")
+                else:
+                    st.info("No hay datos de retail")
+            
+            # FIN DE VIDA
+            with st.expander("♻️ **7. Uso y Fin de Vida**", expanded=True):
+                etapa_fv = desglose_detallado['fin_vida']
+                porcentaje_fv = (etapa_fv['total'] / emisiones_totales * 100) if emisiones_totales > 0 else 0
+                st.metric("Huella Total Uso y Fin de Vida", 
+                         f"{formatear_numero(etapa_fv['total'], 4)} kg CO₂e ({porcentaje_fv:.1f}%)")
+                
+                if etapa_fv['fuentes']:
+                    datos_fv = []
+                    
+                    # Consumo durante uso
+                    if 'uso' in etapa_fv['fuentes']:
+                        uso_data = etapa_fv['fuentes']['uso']
+                        if uso_data.get('energia', 0) > 0:
+                            datos_fv.append({
+                                'Fuente': 'Consumo Energético durante Uso',
+                                'Detalle': f"{formatear_numero(st.session_state.uso_fin_vida.get('energia_uso_kwh', 0), 4)} kWh",
+                                'Huella Carbono (kg CO₂e)': formatear_numero(uso_data['energia'], 4)
+                            })
+                        if uso_data.get('agua', 0) > 0:
+                            datos_fv.append({
+                                'Fuente': 'Consumo de Agua durante Uso',
+                                'Detalle': f"{formatear_numero(st.session_state.uso_fin_vida.get('agua_uso_m3', 0), 4)} m³",
+                                'Huella Carbono (kg CO₂e)': formatear_numero(uso_data['agua'], 4)
+                            })
+                    
+                    # Gestión de empaques post-consumo
+                    if 'fin_vida' in etapa_fv['fuentes']:
+                        for empaque, datos in etapa_fv['fuentes']['fin_vida'].items():
+                            datos_fv.append({
+                                'Fuente': f'Gestión de {empaque}',
+                                'Detalle': 'Empaques al fin de vida',
+                                'Huella Carbono (kg CO₂e)': formatear_numero(datos.get('emisiones', 0), 4)
+                            })
+                    
+                    if datos_fv:
+                        df_fv = pd.DataFrame(datos_fv)
+                        st.dataframe(df_fv, use_container_width=True)
+                    else:
+                        st.info("No hay datos detallados de uso y fin de vida")
+                else:
+                    st.info("No hay datos de uso y fin de vida")
+            
+            # 4. TABLA RESUMEN COMPARATIVA
+            st.header("📋 Resumen Comparativo por Etapa")
+            
+            datos_resumen = []
+            for etapa_nombre, etapa_key in [
+                ('Materias Primas', 'materias_primas'),
+                ('Empaques', 'empaques'),
+                ('Transporte', 'transporte'),
+                ('Procesamiento', 'procesamiento'),
+                ('Distribución', 'distribucion'),
+                ('Retail', 'retail'),
+                ('Fin de Vida', 'fin_vida')
+            ]:
+                etapa = desglose_detallado[etapa_key]
+                if etapa['total'] > 0.001:
+                    porcentaje = (etapa['total'] / emisiones_totales) * 100
+                    datos_resumen.append({
+                        'Etapa': etapa_nombre,
+                        'Huella Carbono (kg CO₂e)': formatear_numero(etapa['total'], 4),
+                        'Huella Carbono (g CO₂e)': formatear_numero(etapa['total'] * 1000, 4),
+                        'Porcentaje (%)': f"{porcentaje:.1f}%"
+                    })
+            
+            if datos_resumen:
+                df_resumen = pd.DataFrame(datos_resumen)
+                df_resumen = df_resumen.sort_values('Huella Carbono (kg CO₂e)', ascending=False)
+                st.dataframe(df_resumen, use_container_width=True)
             else:
-                st.info("ℹ️ No hay emisiones significativas para mostrar. Verifica que hayas ingresado datos en las páginas anteriores.")
+                st.info("No hay emisiones significativas para mostrar")
+            
+            # 5. RECOMENDACIONES
+            st.header("💡 Recomendaciones para Reducción")
+            
+            # Identificar las 3 etapas con mayor impacto
+            etapas_ordenadas = []
+            for etapa_key, etapa_data in desglose_detallado.items():
+                if etapa_data['total'] > 0.001:
+                    etapas_ordenadas.append((etapa_key, etapa_data['total']))
+            
+            etapas_ordenadas.sort(key=lambda x: x[1], reverse=True)
+            top_3 = etapas_ordenadas[:3]
+            
+            nombres_etapas = {
+                'materias_primas': 'Materias Primas',
+                'empaques': 'Empaques',
+                'transporte': 'Transporte',
+                'procesamiento': 'Procesamiento',
+                'distribucion': 'Distribución',
+                'retail': 'Retail',
+                'fin_vida': 'Fin de Vida'
+            }
+            
+            for i, (etapa_key, emisiones) in enumerate(top_3, 1):
+                etapa_nombre = nombres_etapas.get(etapa_key, etapa_key)
+                porcentaje = (emisiones / emisiones_totales) * 100
+                
+                with st.expander(f"**#{i} - {etapa_nombre}** - {formatear_numero(emisiones, 4)} kg CO₂e ({porcentaje:.1f}%)", expanded=True):
+                    if etapa_key == 'materias_primas':
+                        st.markdown("""
+                        **Acciones recomendadas:**
+                        - 🏭 **Evaluar proveedores locales** para reducir distancias de transporte
+                        - 📊 **Optimizar cantidades** utilizadas para reducir mermas
+                        - 🔄 **Considerar materiales alternativos** con menor huella de carbono
+                        - 🌱 **Priorizar ingredientes de temporada** y locales
+                        - 🔍 **Analizar empaques de materias primas** para reducción
+                        """)
+                    elif etapa_key == 'empaques':
+                        st.markdown("""
+                        **Acciones recomendadas:**
+                        - 📉 **Reducir peso** y volumen de empaques
+                        - ♻️ **Usar materiales reciclados** y reciclables
+                        - 🎯 **Diseñar para reciclabilidad** y reutilización
+                        - 🌿 **Considerar materiales biodegradables** o compostables
+                        - 📦 **Optimizar diseño** para eficiencia en transporte
+                        """)
+                    elif etapa_key == 'transporte':
+                        st.markdown("""
+                        **Acciones recomendadas:**
+                        - 🗺️ **Optimizar rutas** de distribución y recolección
+                        - 🚛 **Consolidar envíos** para mejorar eficiencia de carga
+                        - ⚡ **Evaluar modos de transporte** más eficientes (eléctricos, ferroviario)
+                        - 📦 **Reducir peso** de empaques para disminuir carga transportada
+                        - 🏭 **Priorizar proveedores locales** cuando sea posible
+                        """)
+                    elif etapa_key == 'procesamiento':
+                        st.markdown("""
+                        **Acciones recomendadas:**
+                        - 💡 **Implementar eficiencia energética** en procesos
+                        - ☀️ **Considerar energías renovables** en planta
+                        - ⏰ **Optimizar horarios** de producción para eficiencia
+                        - 🔧 **Mantenimiento preventivo** de equipos
+                        - 💧 **Reducir consumo de agua** y optimizar tratamiento
+                        - 📊 **Minimizar mermas** mediante mejor control de procesos
+                        """)
+                    elif etapa_key == 'distribucion':
+                        st.markdown("""
+                        **Acciones recomendadas:**
+                        - 🚚 **Optimizar logística** de última milla
+                        - 📍 **Consolidar centros** de distribución
+                        - 🌡️ **Mejorar eficiencia** en almacenamiento
+                        - 🔄 **Implementar sistemas** de retorno de empaques
+                        - 🗺️ **Planificar rutas** más eficientes
+                        """)
+                    elif etapa_key == 'retail':
+                        st.markdown("""
+                        **Acciones recomendadas:**
+                        - 💡 **Mejorar eficiencia energética** en refrigeración/iluminación
+                        - ⏱️ **Optimizar tiempos** de almacenamiento
+                        - 🌡️ **Mantener temperaturas** óptimas para reducción energética
+                        - 📊 **Monitorear consumos** energéticos regularmente
+                        """)
+                    elif etapa_key == 'fin_vida':
+                        st.markdown("""
+                        **Acciones recomendadas:**
+                        - ♻️ **Promover reciclaje** de empaques post-consumo
+                        - 🌿 **Fomentar compostaje** cuando sea aplicable
+                        - 💡 **Optimizar consumos** durante uso del producto
+                        - 📚 **Educar al consumidor** sobre disposición adecuada
+                        - 🔄 **Diseñar para circularidad** y reutilización
+                        """)
+            
+            # 6. EXPORTACIÓN
+            st.markdown("---")
+            st.subheader("📤 Exportar Resultados")
+            
+            if st.button("💾 Exportar Resultados Detallados a Excel", type="secondary"):
+                try:
+                    # Crear DataFrame para exportación
+                    datos_export = []
+                    for etapa_nombre, etapa_key in [
+                        ('Materias Primas', 'materias_primas'),
+                        ('Empaques', 'empaques'),
+                        ('Transporte', 'transporte'),
+                        ('Procesamiento', 'procesamiento'),
+                        ('Distribución', 'distribucion'),
+                        ('Retail', 'retail'),
+                        ('Fin de Vida', 'fin_vida')
+                    ]:
+                        etapa = desglose_detallado[etapa_key]
+                        if etapa['total'] > 0.001:
+                            datos_export.append({
+                                'Etapa': etapa_nombre,
+                                'Huella Carbono (kg CO₂e)': etapa['total'],
+                                'Huella Carbono (g CO₂e)': etapa['total'] * 1000,
+                                'Porcentaje (%)': (etapa['total'] / emisiones_totales) * 100
+                            })
+                    
+                    df_export = pd.DataFrame(datos_export)
+                    
+                    # Exportar a Excel
+                    import openpyxl
+                    from datetime import datetime
+                    
+                    archivo = f"huella_carbono_detallada_{st.session_state.producto['nombre']}.xlsx"
+                    
+                    with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
+                        df_export.to_excel(writer, sheet_name='Resumen por Etapa', index=False)
+                        
+                        # Hoja de supuestos
+                        supuestos_data = {
+                            'Parámetro': [
+                                'Producto', 'Unidad Funcional', 'Peso Neto (kg)', 'Fecha Cálculo',
+                                'Alcance del Estudio', 'Metodología'
+                            ],
+                            'Valor': [
+                                st.session_state.producto['nombre'],
+                                st.session_state.producto['unidad_funcional'],
+                                formatear_numero(peso_producto_kg, 4),
+                                datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                'Cradle-to-Gate + Uso y Fin de Vida',
+                                'Análisis de Ciclo de Vida (ACV) simplificado'
+                            ]
+                        }
+                        df_supuestos = pd.DataFrame(supuestos_data)
+                        df_supuestos.to_excel(writer, sheet_name='Supuestos', index=False)
+                    
+                    with open(archivo, "rb") as file:
+                        st.download_button(
+                            label="📥 Descargar Archivo Excel",
+                            data=file,
+                            file_name=archivo,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    st.success("✅ Archivo listo para descargar")
+                    
+                except Exception as e:
+                    st.error(f"Error al exportar: {str(e)}")
+        
         else:
-            st.warning("⚠️ No hay datos de desglose disponibles")
+            st.info("ℹ️ No hay emisiones significativas para mostrar. Verifica que hayas ingresado datos en las páginas anteriores.")
+    
     else:
         st.info("ℹ️ **Presiona el botón 'Calcular Huella de Carbono Completa' para ejecutar los cálculos y ver los resultados**")
         st.markdown("""
         ### 📋 ¿Qué se calculará?
         
-        El sistema analizará todas las etapas del ciclo de vida:
+        El sistema analizará todas las etapas del ciclo de vida con desglose detallado:
         
-        - **Materias Primas**: Producción y transporte de ingredientes
-        - **Empaques**: Materiales y transporte de packaging  
-        - **Producción**: Energía, agua y gestión de residuos
-        - **Distribución**: Transporte a puntos de venta
-        - **Retail**: Almacenamiento en tiendas
-        - **Uso y Fin de Vida**: Consumo durante uso y gestión de residuos
+        - **📦 Materias Primas:** Producción de ingredientes + empaques de MP
+        - **📦 Empaques:** Producción de empaques del producto final  
+        - **🚚 Transporte:** Transporte de MP y empaques hasta fábrica
+        - **⚡ Procesamiento:** Energía, agua y gestión de mermas en producción
+        - **🚛 Distribución:** Transporte del producto a puntos de venta
+        - **🏪 Retail:** Almacenamiento en puntos de venta
+        - **♻️ Uso y Fin de Vida:** Consumos durante uso + gestión de empaques
         
         ### ⚠️ Requisitos previos
         - Producto definido (Página 1)

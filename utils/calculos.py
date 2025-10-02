@@ -750,3 +750,175 @@ def calcular_emisiones_totales_completas(session_state, factores_df):
         
     except Exception as e:
         raise Exception(f"Error en cálculo completo: {str(e)}")
+    
+# =============================================================================
+# NUEVAS FUNCIONES PARA DESGLOSE DETALLADO - NO REEMPLAZAN LAS EXISTENTES
+# =============================================================================
+
+def calcular_emisiones_detalladas_completas(session_state, factores_df):
+    """
+    Calcula TODAS las emisiones del ciclo de vida con desglose detallado por fuente
+    MANTIENE COMPATIBILIDAD con funciones existentes
+    """
+    try:
+        emisiones_totales = 0.0
+        desglose_detallado = {
+            'materias_primas': {'total': 0.0, 'fuentes': {}},
+            'empaques': {'total': 0.0, 'fuentes': {}},
+            'transporte': {'total': 0.0, 'fuentes': {}},
+            'procesamiento': {'total': 0.0, 'fuentes': {}},
+            'distribucion': {'total': 0.0, 'fuentes': {}},
+            'retail': {'total': 0.0, 'fuentes': {}},
+            'fin_vida': {'total': 0.0, 'fuentes': {}}
+        }
+        
+        # 1. MATERIAS PRIMAS (usando función existente pero con procesamiento adicional)
+        emisiones_mp, detalle_mp = calcular_emisiones_materias_primas(
+            session_state.get('materias_primas', []), 
+            factores_df
+        )
+        emisiones_totales += emisiones_mp
+        desglose_detallado['materias_primas']['total'] = emisiones_mp
+        # Convertir detalle existente al formato nuevo
+        desglose_detallado['materias_primas']['fuentes'] = {}
+        for mp in detalle_mp:
+            if 'producto' in mp:
+                desglose_detallado['materias_primas']['fuentes'][mp['producto']] = {
+                    'emisiones_material': mp.get('emisiones_producto', 0),
+                    'emisiones_empaque': mp.get('emisiones_empaque', 0),
+                    'total': mp.get('total', 0),
+                    'cantidad_kg': mp.get('cantidad_real_kg', 0)
+                }
+        
+        # 2. EMPAQUES (usando función existente)
+        emisiones_emp, detalle_emp = calcular_emisiones_empaques(
+            session_state.get('empaques', []), 
+            factores_df
+        )
+        emisiones_totales += emisiones_emp
+        desglose_detallado['empaques']['total'] = emisiones_emp
+        desglose_detallado['empaques']['fuentes'] = {}
+        for emp in detalle_emp:
+            nombre = emp.get('nombre', f'Empaque {emp.get("id", "")}')
+            desglose_detallado['empaques']['fuentes'][nombre] = {
+                'emisiones': emp.get('emisiones', 0),
+                'peso_kg': emp.get('peso_total_kg', 0),
+                'material': emp.get('material', '')
+            }
+        
+        # 3. TRANSPORTE (MP + Empaques) - usando funciones existentes
+        emisiones_trans_mp, detalle_trans_mp = calcular_emisiones_transporte_materias_primas(
+            session_state.get('materias_primas', []), 
+            factores_df
+        )
+        emisiones_trans_emp, detalle_trans_emp = calcular_emisiones_transporte_empaques(
+            session_state.get('empaques', []), 
+            factores_df
+        )
+        
+        emisiones_transporte_total = emisiones_trans_mp + emisiones_trans_emp
+        emisiones_totales += emisiones_transporte_total
+        desglose_detallado['transporte']['total'] = emisiones_transporte_total
+        desglose_detallado['transporte']['fuentes'] = {
+            'materias_primas': {'emisiones': emisiones_trans_mp, 'detalle': detalle_trans_mp},
+            'empaques': {'emisiones': emisiones_trans_emp, 'detalle': detalle_trans_emp}
+        }
+        
+        # 4. PROCESAMIENTO (Producción) - usando función existente
+        emisiones_prod, desglose_prod = calcular_emisiones_produccion(
+            session_state.get('produccion', {}), 
+            factores_df
+        )
+        emisiones_totales += emisiones_prod
+        desglose_detallado['procesamiento']['total'] = emisiones_prod
+        desglose_detallado['procesamiento']['fuentes'] = desglose_prod
+        
+        # 5. DISTRIBUCIÓN - usando función existente
+        emisiones_dist, desglose_dist = calcular_emisiones_distribucion(
+            session_state.get('distribucion', {}), 
+            factores_df
+        )
+        emisiones_totales += emisiones_dist
+        desglose_detallado['distribucion']['total'] = emisiones_dist
+        desglose_detallado['distribucion']['fuentes'] = desglose_dist
+        
+        # 6. RETAIL - usando función existente
+        emisiones_retail, desglose_retail = calcular_emisiones_retail(
+            session_state.get('retail', {}), 
+            factores_df
+        )
+        emisiones_totales += emisiones_retail
+        desglose_detallado['retail']['total'] = emisiones_retail
+        desglose_detallado['retail']['fuentes'] = desglose_retail
+        
+        # 7. FIN DE VIDA - usando función existente
+        emisiones_fin_vida, desglose_fin_vida = calcular_emisiones_uso_fin_vida(
+            session_state.get('uso_fin_vida', {}), 
+            factores_df
+        )
+        emisiones_totales += emisiones_fin_vida
+        desglose_detallado['fin_vida']['total'] = emisiones_fin_vida
+        desglose_detallado['fin_vida']['fuentes'] = desglose_fin_vida
+        
+        return emisiones_totales, desglose_detallado
+        
+    except Exception as e:
+        raise Exception(f"Error en cálculo detallado: {str(e)}")
+
+def obtener_detalle_materias_primas_mejorado(materias_primas, factores_df):
+    """
+    Función auxiliar para obtener mejor detalle de materias primas
+    """
+    detalle_mejorado = {}
+    
+    for i, materia in enumerate(materias_primas):
+        if not materia or 'producto' not in materia:
+            continue
+            
+        try:
+            # Obtener factor
+            factor, unidad_esperada = obtener_factor(factores_df, 'materia_prima', materia['producto'])
+            cantidad_real_kg = materia.get('cantidad_real_kg', 0)
+            emisiones_producto = cantidad_real_kg * factor
+            
+            # Empaque de la materia prima
+            emisiones_empaque_mp = 0.0
+            if materia.get('empaque') and materia['empaque'].get('material'):
+                factor_empaque, unidad_emp = obtener_factor(factores_df, 'material_empaque', materia['empaque']['material'])
+                peso_emp_kg = materia['empaque'].get('peso_kg', 0)
+                emisiones_empaque_mp = peso_emp_kg * factor_empaque
+            
+            nombre_mp = materia['producto']
+            detalle_mejorado[nombre_mp] = {
+                'emisiones_material': emisiones_producto,
+                'emisiones_empaque': emisiones_empaque_mp,
+                'total': emisiones_producto + emisiones_empaque_mp,
+                'cantidad_kg': cantidad_real_kg
+            }
+                
+        except Exception as e:
+            print(f"Error en detalle mejorado de MP {materia.get('producto', 'desconocido')}: {str(e)}")
+    
+    return detalle_mejorado
+
+def obtener_detalle_transporte_mejorado(detalle_transporte):
+    """
+    Convierte el detalle de transporte existente al formato mejorado
+    """
+    detalle_mejorado = {}
+    
+    for item in detalle_transporte:
+        if 'producto' in item:  # Transporte MP
+            nombre = item['producto']
+            detalle_mejorado[nombre] = {
+                'emisiones': item.get('total_emisiones', 0),
+                'rutas': item.get('rutas', [])
+            }
+        elif 'nombre' in item:  # Transporte empaques
+            nombre = item['nombre']
+            detalle_mejorado[nombre] = {
+                'emisiones': item.get('total_emisiones', 0),
+                'rutas': item.get('rutas', [])
+            }
+    
+    return detalle_mejorado
