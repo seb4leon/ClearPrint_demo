@@ -274,8 +274,8 @@ elif pagina == "1. Definir Producto":
                     "**Peso neto del producto**", 
                     min_value=0.0,
                     value=st.session_state.producto['peso_neto_valor'],  # CORREGIDO
-                    step=0.1,
-                    format="%.3f",
+                    step=0.000000001,
+                    format="%.10f",
                     key="peso_neto_input"
                 )
                 st.session_state.producto['peso_neto_valor'] = peso_neto  # GUARDAR
@@ -296,8 +296,8 @@ elif pagina == "1. Definir Producto":
                     "**Peso del empaque**", 
                     min_value=0.0,
                     value=st.session_state.producto['peso_empaque_valor'],  # CORREGIDO
-                    step=0.1,
-                    format="%.3f",
+                    step=0.000000001,
+                    format="%.10f",
                     key="peso_empaque_input"
                 )
                 st.session_state.producto['peso_empaque_valor'] = peso_empaque  # GUARDAR
@@ -423,10 +423,10 @@ elif pagina == "2. Materias Primas":
                         cantidad_teorica = st.number_input(
                             f"**Cantidad usada**",
                             min_value=0.0,
-                            value=st.session_state.materias_primas[i].get('cantidad_teorica', 0.0),
+                            value=st.session_state.materias_primas[i].get('cantidad_teorica', 0.0) if i < len(st.session_state.materias_primas) else 0.0,
                             key=f"cantidad_teorica_{i}",
-                            step=0.1,
-                            format="%.3f"
+                            step=0.000000001,
+                            format="%.10f"
                         )
                     with col_teo2:
                         unidad_teorica = st.selectbox(
@@ -444,10 +444,10 @@ elif pagina == "2. Materias Primas":
                         cantidad_real = st.number_input(
                             f"**Cantidad comprada**",
                             min_value=0.0,
-                            value=st.session_state.materias_primas[i].get('cantidad_real', 0.0),
+                            value=st.session_state.materias_primas[i].get('cantidad_real', 0.0) if i < len(st.session_state.materias_primas) else 0.0,
                             key=f"cantidad_real_{i}",
-                            step=0.1,
-                            format="%.3f"
+                            step=0.000000001,
+                            format="%.10f"
                         )
                     with col_real2:
                         unidad_real = st.selectbox(
@@ -474,11 +474,11 @@ elif pagina == "2. Materias Primas":
                         except:
                             st.error("Error en conversión de unidades")
                 
-                # Empaque de la materia prima (opcional)
+                # Empaque de la materia prima (opcional) - CORREGIDO
                 with st.expander("📦 **Empaque de esta materia prima (opcional)**"):
                     tiene_empaque = st.checkbox(
                         "¿Esta materia prima viene empaquetada?",
-                        value=bool(st.session_state.materias_primas[i].get('empaque')),
+                        value=bool(st.session_state.materias_primas[i].get('empaque')) if i < len(st.session_state.materias_primas) else False,
                         key=f"tiene_empaque_{i}"
                     )
                     
@@ -494,13 +494,20 @@ elif pagina == "2. Materias Primas":
                             )
                         
                         with col_emp2:
+                            # INICIALIZACIÓN SEGURA del diccionario de empaque
+                            if i >= len(st.session_state.materias_primas):
+                                st.session_state.materias_primas.append({})
+                            
+                            if 'empaque' not in st.session_state.materias_primas[i]:
+                                st.session_state.materias_primas[i]['empaque'] = {}
+                                
                             peso_empaque = st.number_input(
                                 f"**Peso del empaque**",
                                 min_value=0.0,
-                                value=st.session_state.materias_primas[i].get('empaque', {}).get('peso', 0.0),
+                                value=float(st.session_state.materias_primas[i].get('empaque', {}).get('peso', 0.0)),
                                 key=f"peso_empaque_{i}",
-                                step=0.01,
-                                format="%.3f"
+                                step=0.000000001,
+                                format="%.10f"
                             )
                         
                         with col_emp3:
@@ -1341,7 +1348,23 @@ elif pagina == "7. Distribución":
         st.warning("⚠️ Primero define un producto con peso en la página 1")
         st.stop()
     
+    # CALCULAR PESO TOTAL CORREGIDO: Producto + Empaques
     peso_producto_kg = st.session_state.producto.get('peso_neto_kg', 0)
+    
+    # Calcular peso total de empaques del producto
+    peso_empaques_total_kg = 0
+    for emp in st.session_state.empaques:
+        if emp and emp.get('nombre'):
+            peso_unitario_kg = emp.get('peso_kg', 0)
+            cantidad = emp.get('cantidad', 1)
+            peso_empaques_total_kg += peso_unitario_kg * cantidad
+    
+    # Peso total a distribuir: Producto + Empaques
+    peso_total_distribuir_kg = peso_producto_kg + peso_empaques_total_kg
+    
+    st.success(f"📦 **Peso total a distribuir:** {formatear_numero(peso_total_distribuir_kg, 4)} kg "
+              f"(Producto: {formatear_numero(peso_producto_kg, 4)} kg + "
+              f"Empaques: {formatear_numero(peso_empaques_total_kg, 4)} kg)")
     
     # INICIALIZACIÓN ROBUSTA
     if 'canales' not in st.session_state.distribucion:
@@ -1448,11 +1471,13 @@ elif pagina == "7. Distribución":
             # Configuración detallada por canal
             for i, canal in enumerate(st.session_state.distribucion['canales']):
                 with st.expander(f"**{canal['nombre']}** - {canal['porcentaje']:.1f}%", expanded=i==0):
-                    # Calcular peso distribuido
-                    peso_distribuido = (peso_producto_kg * canal['porcentaje']) / 100
+                    # Calcular peso distribuido CORREGIDO: Incluye empaques
+                    peso_distribuido = (peso_total_distribuir_kg * canal['porcentaje']) / 100
                     canal['peso_distribuido_kg'] = peso_distribuido
                     
-                    st.write(f"**Peso a distribuir:** {formatear_numero(peso_distribuido)} kg")
+                    st.write(f"**Peso a distribuir:** {formatear_numero(peso_distribuido, 4)} kg")
+                    st.write(f"💡 *Incluye: Producto ({formatear_numero((peso_producto_kg * canal['porcentaje']) / 100, 4)} kg) + "
+                            f"Empaques ({formatear_numero((peso_empaques_total_kg * canal['porcentaje']) / 100, 4)} kg)*")
                     
                     # Configuración de rutas para este canal
                     if 'rutas' not in canal:
@@ -1505,6 +1530,8 @@ elif pagina == "7. Distribución":
                                 "Distancia (km)",
                                 min_value=0.0,
                                 value=float(ruta.get('distancia_km', 0.0)),
+                                step=0.1,
+                                format="%.1f",
                                 key=f"distancia_{i}_{j}"
                             )
                             ruta['distancia_km'] = distancia
@@ -1518,11 +1545,14 @@ elif pagina == "7. Distribución":
                             )
                             ruta['tipo_transporte'] = transporte
                         
+                        # CARGA CORREGIDA: Incluye producto + empaques
                         ruta['carga_kg'] = peso_distribuido
             
             # Botón de guardado final
             if st.form_submit_button("💾 **Guardar Configuración Completa**", type="primary"):
                 st.success("✅ **Configuración de distribución guardada correctamente**")
+                st.info(f"📦 **Peso total en distribución:** {formatear_numero(peso_total_distribuir_kg, 4)} kg "
+                       f"(Producto + Empaques)")
     
     # --- RESUMEN FINAL ---
     st.markdown("---")
@@ -1549,19 +1579,35 @@ elif pagina == "7. Distribución":
             
             emisiones_totales += emisiones_canal
             
+            # CONVERTIR A g CO₂e y formatear con máximo 4 decimales
+            emisiones_canal_g = emisiones_canal * 1000
+            
             datos_resumen.append({
                 'Canal': canal['nombre'],
                 'Porcentaje': f"{canal['porcentaje']:.1f}%",
-                'Peso': f"{formatear_numero(canal.get('peso_distribuido_kg', 0))} kg",
+                'Peso': f"{formatear_numero(canal.get('peso_distribuido_kg', 0), 4)} kg",
                 'Rutas': len(rutas_validas),
-                'Distancia': f"{formatear_numero(distancia_total)} km",
-                'Emisiones': f"{formatear_numero(emisiones_canal)} kg CO₂e"
+                'Distancia': f"{formatear_numero(distancia_total, 1)} km",  # 1 decimal para distancias
+                'Huella Carbono': f"{formatear_numero(emisiones_canal_g, 4)} g CO₂e"  # Cambiado a g CO₂e
             })
     
     if datos_resumen:
         df_resumen = pd.DataFrame(datos_resumen)
         st.dataframe(df_resumen, use_container_width=True)
-        st.success(f"**Emisiones totales estimadas: {formatear_numero(emisiones_totales)} kg CO₂e**")
+        
+        # Mostrar emisiones totales en g CO₂e
+        emisiones_totales_g = emisiones_totales * 1000
+        st.success(f"**Huella de carbono total estimada: {formatear_numero(emisiones_totales_g, 4)} g CO₂e**")
+        
+        # Mostrar desglose del peso total
+        st.info(f"🔍 **Desglose del peso total en distribución:**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Producto", f"{formatear_numero(peso_producto_kg, 4)} kg")
+        with col2:
+            st.metric("Empaques", f"{formatear_numero(peso_empaques_total_kg, 4)} kg")
+        with col3:
+            st.metric("Total", f"{formatear_numero(peso_total_distribuir_kg, 4)} kg")
     
 # Página 8: Retail
 elif pagina == "8. Retail":
@@ -1589,7 +1635,7 @@ elif pagina == "8. Retail":
     opciones_almacenamiento = {
         'temperatura_ambiente': {
             'nombre': 'Temperatura ambiente (estante)',
-            'factor_energia': 0.1  # kWh por día (iluminación básica)
+            'factor_energia': 0.784931507  # kWh por día (iluminación básica)
         },
         'congelado': {
             'nombre': 'Congelado/Refrigerado',
@@ -1629,30 +1675,51 @@ elif pagina == "8. Retail":
             consumo_personalizado = st.number_input(
                 "**Consumo energético diario (kWh/día)**",
                 min_value=0.0,
-                value=consumo_sugerido,
+                value=float(opciones_almacenamiento[tipo_key]['factor_energia']),
+                step=0.000000001,
+                format="%.10f",
                 help="Puede ajustar el consumo según las condiciones específicas del retail"
             )
         
         if st.form_submit_button("💾 Guardar Configuración"):
-            st.session_state.retail.update({
-                'dias_almacenamiento': dias,
-                'tipo_almacenamiento': tipo_key,
-                'consumo_energia_kwh': (consumo_personalizado or opciones_almacenamiento[tipo_key]['factor_energia']) * dias
-            })
-            
-            # Calcular emisiones por consumo eléctrico
             try:
-                factor_electricidad = obtener_factor(factores, 'energia', 'electricidad')
-                emisiones = st.session_state.retail['consumo_energia_kwh'] * factor_electricidad
-                st.session_state.retail['emisiones_estimadas'] = emisiones
+                # Calcular consumo total
+                if tipo_key == 'congelado' and consumo_personalizado:
+                    consumo_total = consumo_personalizado * dias
+                else:
+                    consumo_total = opciones_almacenamiento[tipo_key]['factor_energia'] * dias
+                
+                st.session_state.retail.update({
+                    'dias_almacenamiento': dias,
+                    'tipo_almacenamiento': tipo_key,
+                    'consumo_energia_kwh': consumo_total
+                })
+                
+                # Calcular emisiones por consumo eléctrico
+                try:
+                    factor_electricidad = obtener_factor(factores, 'energia', 'electricidad')
+                    if isinstance(factor_electricidad, tuple):
+                        factor_electricidad = factor_electricidad[0]  # Tomar solo el valor numérico
+                    
+                    # Asegurarse de que ambos sean números
+                    consumo_kwh = float(consumo_total)
+                    factor_num = float(factor_electricidad)
+                    
+                    emisiones = consumo_kwh * factor_num
+                    st.session_state.retail['emisiones_estimadas'] = emisiones
+                    
+                    st.success("✅ Configuración guardada correctamente")
+                    st.success(f"📊 Emisiones estimadas: {formatear_numero(emisiones)} kg CO₂e")
+                    
+                except Exception as e:
+                    st.error(f"❌ Error al calcular emisiones: {str(e)}")
+                    st.session_state.retail['emisiones_estimadas'] = 0.0
+                    
             except Exception as e:
-                st.error(f"Error al calcular emisiones: {str(e)}")
-                st.session_state.retail['emisiones_estimadas'] = 0.0
-            
-            st.success("✅ Configuración guardada correctamente")
+                st.error(f"❌ Error al guardar configuración: {str(e)}")
     
     # Mostrar resumen si hay datos
-    if st.session_state.retail.get('emisiones_estimadas'):
+    if st.session_state.retail.get('emisiones_estimadas') is not None:
         st.markdown("---")
         st.subheader("📊 Resumen")
         
@@ -1969,7 +2036,7 @@ elif pagina == "10. Resultados":
                         'peso_producto_kg': st.session_state.producto.get('peso_neto_kg', 0)
                     }
                     
-                    st.success(f"✅ Cálculos completados: {formatear_numero(emisiones_totales)} kg CO₂e")
+                    st.success(f"✅ Cálculos completados: {formatear_numero(emisiones_totales, 4)} kg CO₂e")
                     
         except Exception as e:
             st.error(f"❌ Error en los cálculos: {str(e)}")
@@ -1987,12 +2054,12 @@ elif pagina == "10. Resultados":
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Huella Total", f"{formatear_numero(emisiones_totales)} kg CO₂e")
+            st.metric("Huella Total", f"{formatear_numero(emisiones_totales, 4)} kg CO₂e")
         with col2:
             # Calcular por kg de producto
             if peso_producto_kg > 0:
                 emisiones_por_kg = emisiones_totales / peso_producto_kg
-                st.metric("Por kg de producto", f"{formatear_numero(emisiones_por_kg)} kg CO₂e/kg")
+                st.metric("Por kg de producto", f"{formatear_numero(emisiones_por_kg, 4)} kg CO₂e/kg")
             else:
                 st.metric("Por kg de producto", "N/A")
         with col3:
@@ -2001,6 +2068,25 @@ elif pagina == "10. Resultados":
                 porcentaje = (etapa_mayor[1] / emisiones_totales) * 100 if emisiones_totales > 0 else 0
                 st.metric("Etapa crítica", f"{etapa_mayor[0]} ({porcentaje:.1f}%)")
         
+        # CONVERSIÓN A g CO2e - NUEVA SECCIÓN
+        st.markdown("---")
+        st.subheader("⚖️ Resultados en Diferentes Unidades")
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total", f"{formatear_numero(emisiones_totales, 4)} kg CO₂e")
+        with col2:
+            emisiones_g = emisiones_totales * 1000
+            st.metric("Total", f"{formatear_numero(emisiones_g, 4)} g CO₂e")
+        with col3:
+            if peso_producto_kg > 0:
+                emisiones_por_kg = emisiones_totales / peso_producto_kg
+                st.metric("Por kg", f"{formatear_numero(emisiones_por_kg, 4)} kg CO₂e/kg")
+        with col4:
+            if peso_producto_kg > 0:
+                emisiones_por_kg_g = emisiones_por_kg * 1000
+                st.metric("Por kg", f"{formatear_numero(emisiones_por_kg_g, 4)} g CO₂e/kg")
+
         # 2. GRÁFICOS
         st.subheader("📈 Distribución de Emisiones por Etapa")
         
@@ -2016,13 +2102,13 @@ elif pagina == "10. Resultados":
                     fig_barras = px.bar(
                         x=list(etapas_significativas.keys()),
                         y=list(etapas_significativas.values()),
-                        title="Emisiones por Etapa (kg CO₂e)",
+                        title="Huella de Carbono por Etapa (kg CO₂e)",
                         labels={'x': 'Etapa', 'y': 'kg CO₂e'},
                         color=list(etapas_significativas.values()),
                         color_continuous_scale='Viridis'
                     )
                     fig_barras.update_traces(
-                        text=[f"{formatear_numero(v)} kg" for v in etapas_significativas.values()],
+                        text=[f"{formatear_numero(v, 4)} kg" for v in etapas_significativas.values()],
                         textposition='auto'
                     )
                     fig_barras.update_layout(showlegend=False)
@@ -2042,29 +2128,30 @@ elif pagina == "10. Resultados":
                     )
                     st.plotly_chart(fig_torta, use_container_width=True)
                 
-                # 3. TABLA DETALLADA
+                # 3. TABLA DETALLADA CON FORMATO MEJORADO
                 st.subheader("📋 Desglose Detallado por Etapa")
                 
-                # Crear DataFrame con todos los datos
+                # Crear DataFrame con todos los datos y formato mejorado
                 datos_tabla = []
                 for etapa, emisiones in desglose.items():
                     if emisiones > 0.001:  # Solo mostrar etapas significativas
                         porcentaje = (emisiones / emisiones_totales) * 100
+                        
+                        # Formatear con máximo 4 decimales
+                        emisiones_kg = formatear_numero(emisiones, 4)
+                        emisiones_g = formatear_numero(emisiones * 1000, 4)
+                        
                         datos_tabla.append({
                             'Etapa': etapa,
-                            'Emisiones (kg CO₂e)': emisiones,
-                            'Porcentaje (%)': porcentaje
+                            'Huella Carbono (kg CO₂e)': emisiones_kg,
+                            'Huella Carbono (g CO₂e)': emisiones_g,
+                            'Porcentaje (%)': f"{porcentaje:.1f}%"
                         })
                 
                 df_desglose = pd.DataFrame(datos_tabla)
-                df_desglose = df_desglose.sort_values('Emisiones (kg CO₂e)', ascending=False)
+                df_desglose = df_desglose.sort_values('Huella Carbono (kg CO₂e)', ascending=False)
                 
-                # Formatear para mostrar
-                df_display = df_desglose.copy()
-                df_display['Emisiones (kg CO₂e)'] = df_display['Emisiones (kg CO₂e)'].apply(lambda x: formatear_numero(x))
-                df_display['Porcentaje (%)'] = df_display['Porcentaje (%)'].apply(lambda x: f"{x:.1f}%")
-                
-                st.dataframe(df_display, use_container_width=True)
+                st.dataframe(df_desglose, use_container_width=True)
                 
                 # 4. ANÁLISIS DETALLADO POR ETAPA
                 st.markdown("---")
@@ -2073,7 +2160,7 @@ elif pagina == "10. Resultados":
                 # Materias Primas
                 with st.expander("📦 Materias Primas", expanded=True):
                     if 'Materias Primas' in desglose and desglose['Materias Primas'] > 0:
-                        st.metric("Emisiones Materias Primas", f"{formatear_numero(desglose['Materias Primas'])} kg CO₂e")
+                        st.metric("Huella Carbono Materias Primas", f"{formatear_numero(desglose['Materias Primas'], 4)} kg CO₂e")
                         
                         # Calcular emisiones específicas de MP
                         try:
@@ -2088,8 +2175,8 @@ elif pagina == "10. Resultados":
                                 for mp in detalle_mp:
                                     mp_data.append({
                                         'Material': mp['producto'],
-                                        'Cantidad (kg)': formatear_numero(mp['cantidad_real_kg']),
-                                        'Emisiones (kg CO₂e)': formatear_numero(mp['total'])
+                                        'Cantidad (kg)': formatear_numero(mp['cantidad_real_kg'], 4),
+                                        'Huella Carbono (kg CO₂e)': formatear_numero(mp['total'], 4)
                                     })
                                 df_mp = pd.DataFrame(mp_data)
                                 st.dataframe(df_mp, use_container_width=True)
@@ -2105,30 +2192,30 @@ elif pagina == "10. Resultados":
                     )
                     
                     if emisiones_transporte_total > 0:
-                        st.metric("Emisiones Totales Transporte", f"{formatear_numero(emisiones_transporte_total)} kg CO₂e")
+                        st.metric("Huella Carbono Total Transporte", f"{formatear_numero(emisiones_transporte_total, 4)} kg CO₂e")
                         
                         # Mostrar componentes del transporte
                         componentes = []
                         if desglose.get('Transporte MP', 0) > 0:
-                            componentes.append(f"MP: {formatear_numero(desglose['Transporte MP'])} kg CO₂e")
+                            componentes.append(f"MP: {formatear_numero(desglose['Transporte MP'], 4)} kg CO₂e")
                         if desglose.get('Transporte Empaques', 0) > 0:
-                            componentes.append(f"Empaques: {formatear_numero(desglose['Transporte Empaques'])} kg CO₂e")
+                            componentes.append(f"Empaques: {formatear_numero(desglose['Transporte Empaques'], 4)} kg CO₂e")
                         if desglose.get('Distribución', 0) > 0:
-                            componentes.append(f"Distribución: {formatear_numero(desglose['Distribución'])} kg CO₂e")
+                            componentes.append(f"Distribución: {formatear_numero(desglose['Distribución'], 4)} kg CO₂e")
                         
                         st.write("**Componentes:** " + " | ".join(componentes))
                 
                 # Producción
                 with st.expander("⚡ Producción", expanded=True):
                     if desglose.get('Producción', 0) > 0:
-                        st.metric("Emisiones Producción", f"{formatear_numero(desglose['Producción'])} kg CO₂e")
+                        st.metric("Huella Carbono Producción", f"{formatear_numero(desglose['Producción'], 4)} kg CO₂e")
                         
                         # Mostrar datos de producción si existen
                         produccion_data = st.session_state.get('produccion', {})
                         if produccion_data.get('energia_kwh', 0) > 0:
-                            st.write(f"- Energía: {formatear_numero(produccion_data['energia_kwh'])} kWh")
+                            st.write(f"- Energía: {formatear_numero(produccion_data['energia_kwh'], 4)} kWh")
                         if produccion_data.get('agua_m3', 0) > 0:
-                            st.write(f"- Agua: {formatear_numero(produccion_data['agua_m3'])} m³")
+                            st.write(f"- Agua: {formatear_numero(produccion_data['agua_m3'], 4)} m³")
                 
                 # 5. RECOMENDACIONES
                 st.markdown("---")
@@ -2139,7 +2226,7 @@ elif pagina == "10. Resultados":
                 top_3 = [etapa for etapa in etapas_ordenadas if etapa[1] > 0.001][:3]
                 
                 for i, (etapa, emisiones) in enumerate(top_3, 1):
-                    with st.expander(f"**#{i} - {etapa}** - {formatear_numero(emisiones)} kg CO₂e ({(emisiones/emisiones_totales)*100:.1f}%)", expanded=True):
+                    with st.expander(f"**#{i} - {etapa}** - {formatear_numero(emisiones, 4)} kg CO₂e ({(emisiones/emisiones_totales)*100:.1f}%)", expanded=True):
                         if "Materias Primas" in etapa:
                             st.markdown("""
                             **Acciones recomendadas:**

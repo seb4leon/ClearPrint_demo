@@ -72,31 +72,81 @@ def convertir_unidad(valor, unidad_origen, unidad_destino='kg'):
     except (ValueError, KeyError) as e:
         raise ValueError(f"Error en conversión: {str(e)}")
 
-def formatear_numero(numero, decimales=3):
+def formatear_numero(numero, decimales=None):
     """
     Formatea un número al formato español (punto para miles, coma para decimales)
+    ELIMINA AUTOMÁTICAMENTE CEROS NO SIGNIFICATIVOS
     """
     try:
-        if numero is None or numero == 0:
+        if numero is None:
             return "0"
+        
+        # Convertir a float si es string
+        if isinstance(numero, str):
+            # Manejar formato español (coma decimal) e inglés (punto decimal)
+            numero_limpio = numero.replace('.', '').replace(',', '.')
+            try:
+                numero = float(numero_limpio)
+            except:
+                return "0"
         
         numero = float(numero)
         
-        # Formatear según la magnitud del número
-        if abs(numero) >= 1000000:
-            return locale.format_string("%.1f", numero, grouping=True).replace(",", "X").replace(".", ",").replace("X", ".")
-        elif abs(numero) >= 1000:
-            return locale.format_string("%.0f", numero, grouping=True).replace(",", "X").replace(".", ",").replace("X", ".")
-        elif abs(numero) >= 100:
-            return locale.format_string("%.1f", numero, grouping=True).replace(",", "X").replace(".", ",").replace("X", ".")
-        elif abs(numero) >= 10:
-            return locale.format_string("%.2f", numero, grouping=True).replace(",", "X").replace(".", ",").replace("X", ".")
-        else:
+        # Caso especial: número entero
+        if numero == int(numero):
+            parte_entera = f"{int(numero):,}".replace(",", ".")
+            return parte_entera
+        
+        # Para números con decimales
+        if decimales is not None:
+            # Si se especifican decimales, usar ese formato
             formato = f"%.{decimales}f"
-            return locale.format_string(formato, numero, grouping=True).replace(",", "X").replace(".", ",").replace("X", ".")
-    except:
-        # Fallback si locale no funciona
-        return f"{numero:,.{decimales}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            numero_str = formato % numero
+        else:
+            # Determinar automáticamente los decimales significativos
+            numero_str = f"{numero:.15f}"  # Usar muchos decimales para análisis
+            numero_str = numero_str.rstrip('0')  # Eliminar ceros a la derecha
+            
+            # Si quedó un punto solo, es un número entero
+            if numero_str.endswith('.'):
+                numero_str = numero_str[:-1]
+        
+        # Separar parte entera y decimal
+        if '.' in numero_str:
+            parte_entera_str, parte_decimal_str = numero_str.split('.')
+        else:
+            parte_entera_str = numero_str
+            parte_decimal_str = ""
+        
+        # Formatear parte entera con separadores de miles
+        try:
+            parte_entera = int(parte_entera_str)
+            parte_entera_formateada = f"{parte_entera:,}".replace(",", ".")
+        except:
+            parte_entera_formateada = parte_entera_str
+        
+        # Combinar parte entera y decimal
+        if parte_decimal_str:
+            return f"{parte_entera_formateada},{parte_decimal_str}"
+        else:
+            return parte_entera_formateada
+            
+    except Exception as e:
+        print(f"Error al formatear número {numero}: {str(e)}")
+        return str(numero)
+
+def obtener_unidades_disponibles(tipo='masa'):
+    """
+    Devuelve las unidades disponibles para un tipo específico
+    """
+    if tipo == 'masa':
+        return list(UNIDADES_MASA.keys())
+    elif tipo == 'volumen':
+        return list(UNIDADES_VOLUMEN.keys())
+    elif tipo == 'energia':
+        return list(UNIDADES_ENERGIA.keys())
+    else:
+        return []
 
 def validar_unidades_compatibles(unidad1, unidad2):
     """
@@ -113,20 +163,7 @@ def validar_unidades_compatibles(unidad1, unidad2):
         else:
             tipos.append('desconocido')
     
-    return tipos[0] == tipos[1] and tipos[0] != 'desconocido'
-
-def obtener_unidades_disponibles(tipo='masa'):
-    """
-    Devuelve las unidades disponibles para un tipo específico
-    """
-    if tipo == 'masa':
-        return list(UNIDADES_MASA.keys())
-    elif tipo == 'volumen':
-        return list(UNIDADES_VOLUMEN.keys())
-    elif tipo == 'energia':
-        return list(UNIDADES_ENERGIA.keys())
-    else:
-        return []
+    return len(tipos) == 2 and tipos[0] == tipos[1] and tipos[0] != 'desconocido'
 
 # Tests básicos
 if __name__ == "__main__":
@@ -135,6 +172,9 @@ if __name__ == "__main__":
     print("1 kg =", convertir_unidad(1, 'kg', 'g'), "g")
     print("1000 ml =", convertir_unidad(1000, 'ml', 'L'), "L")
     
-    # Test formato
-    print("Formato español:", formatear_numero(1234.567))
-    print("Formato español:", formatear_numero(0.001234))
+    # Test formato - CASOS DE PRUEBA
+    print("35.0 →", formatear_numero(35.0))  # Debe mostrar "35"
+    print("5.06 →", formatear_numero(5.06))  # Debe mostrar "5,06"  
+    print("1234.567 →", formatear_numero(1234.567))  # Debe mostrar "1.234,567"
+    print("0.001234 →", formatear_numero(0.001234))  # Debe mostrar "0,001234"
+    print("1000.00 →", formatear_numero(1000.00))  # Debe mostrar "1.000"

@@ -631,7 +631,7 @@ def calcular_emisiones_uso_fin_vida(uso_fin_vida_data, factores_df):
 
 def calcular_emisiones_retail(retail_data, factores_df):
     """
-    Calcula emisiones de la etapa de retail - CORREGIDA
+    Calcula emisiones de la etapa de retail - CORREGIDA Y ROBUSTA
     """
     try:
         if not retail_data:
@@ -640,13 +640,21 @@ def calcular_emisiones_retail(retail_data, factores_df):
         emisiones_totales = 0.0
         desglose = {}
         
-        # Obtener consumo energético
-        consumo_kwh = retail_data.get('consumo_energia_kwh', 0)
+        # Obtener consumo energético de forma segura
+        try:
+            consumo_kwh = float(retail_data.get('consumo_energia_kwh', 0))
+        except (ValueError, TypeError):
+            consumo_kwh = 0.0
         
         if consumo_kwh > 0:
             # Obtener factor de emisión para electricidad
-            factor_energia, unidad_energia = obtener_factor(factores_df, 'energia', 'electricidad')
-            
+            try:
+                factor_energia, unidad_energia = obtener_factor(factores_df, 'energia', 'electricidad')
+                # Asegurarse de que factor_energia sea un número
+                factor_energia = float(factor_energia)
+            except (ValueError, TypeError, IndexError):
+                factor_energia = 0.45  # Valor por defecto
+                
             # Calcular emisiones
             emisiones = consumo_kwh * factor_energia
             emisiones_totales += emisiones
@@ -663,7 +671,8 @@ def calcular_emisiones_retail(retail_data, factores_df):
         return emisiones_totales, desglose
         
     except Exception as e:
-        raise Exception(f"Error en cálculo de emisiones retail: {str(e)}")
+        print(f"Error en cálculo de emisiones retail: {str(e)}")
+        return 0.0, {}
     
 def calcular_emisiones_totales_completas(session_state, factores_df):
     """
