@@ -1,6 +1,7 @@
 """
 Sistema de conversión de unidades para la calculadora de huella de carbono
 Formato español: punto para miles, coma para decimales
+ELIMINACIÓN AUTOMÁTICA DE CEROS DECIMALES NO SIGNIFICATIVOS
 """
 
 import locale
@@ -75,7 +76,14 @@ def convertir_unidad(valor, unidad_origen, unidad_destino='kg'):
 def formatear_numero(numero, decimales=None):
     """
     Formatea un número al formato español (punto para miles, coma para decimales)
-    ELIMINA AUTOMÁTICAMENTE CEROS NO SIGNIFICATIVOS
+    ELIMINA AUTOMÁTICAMENTE CEROS NO SIGNIFICATIVOS DESPUÉS DEL PUNTO DECIMAL
+    
+    Args:
+        numero: Número a formatear (int, float, o string)
+        decimales: Número máximo de decimales a mostrar (None = automático)
+    
+    Returns:
+        String formateado sin ceros innecesarios
     """
     try:
         if numero is None:
@@ -97,43 +105,57 @@ def formatear_numero(numero, decimales=None):
             parte_entera = f"{int(numero):,}".replace(",", ".")
             return parte_entera
         
-        # Para números con decimales
+        # Para números con decimales - NUEVA LÓGICA MEJORADA
         if decimales is not None:
-            # Si se especifican decimales, usar ese formato
+            # Si se especifican decimales, usar ese formato exacto
             formato = f"%.{decimales}f"
             numero_str = formato % numero
         else:
             # Determinar automáticamente los decimales significativos
-            numero_str = f"{numero:.15f}"  # Usar muchos decimales para análisis
-            numero_str = numero_str.rstrip('0')  # Eliminar ceros a la derecha
+            # Usar formato científico para detectar ceros no significativos
+            numero_str = f"{numero:.10f}"  # Usar 10 decimales como máximo para análisis
             
-            # Si quedó un punto solo, es un número entero
-            if numero_str.endswith('.'):
-                numero_str = numero_str[:-1]
+            # Eliminar ceros a la derecha del punto decimal
+            if '.' in numero_str:
+                parte_entera, parte_decimal = numero_str.split('.')
+                # Eliminar ceros consecutivos desde la derecha
+                parte_decimal_limpia = parte_decimal.rstrip('0')
+                
+                # Si no quedan decimales, devolver solo la parte entera
+                if not parte_decimal_limpia:
+                    numero_str = parte_entera
+                else:
+                    numero_str = f"{parte_entera}.{parte_decimal_limpia}"
         
-        # Separar parte entera y decimal
-        if '.' in numero_str:
-            parte_entera_str, parte_decimal_str = numero_str.split('.')
-        else:
-            parte_entera_str = numero_str
-            parte_decimal_str = ""
+        # Reemplazar punto decimal por coma para formato español
+        numero_str = numero_str.replace('.', ',')
         
         # Formatear parte entera con separadores de miles
-        try:
-            parte_entera = int(parte_entera_str)
-            parte_entera_formateada = f"{parte_entera:,}".replace(",", ".")
-        except:
-            parte_entera_formateada = parte_entera_str
-        
-        # Combinar parte entera y decimal
-        if parte_decimal_str:
-            return f"{parte_entera_formateada},{parte_decimal_str}"
+        if ',' in numero_str:
+            parte_entera_str, parte_decimal_str = numero_str.split(',')
+            try:
+                parte_entera = int(parte_entera_str)
+                parte_entera_formateada = f"{parte_entera:,}".replace(",", ".")
+                return f"{parte_entera_formateada},{parte_decimal_str}"
+            except:
+                return numero_str
         else:
-            return parte_entera_formateada
+            try:
+                parte_entera = int(numero_str)
+                return f"{parte_entera:,}".replace(",", ".")
+            except:
+                return numero_str
             
     except Exception as e:
         print(f"Error al formatear número {numero}: {str(e)}")
-        return str(numero)
+        return str(numero) if numero is not None else "0"
+
+def formatear_numero_sin_ceros(numero, max_decimales=6):
+    """
+    Función alternativa específica para eliminar ceros decimales
+    (Mantener por compatibilidad)
+    """
+    return formatear_numero(numero, None)
 
 def obtener_unidades_disponibles(tipo='masa'):
     """
@@ -165,16 +187,43 @@ def validar_unidades_compatibles(unidad1, unidad2):
     
     return len(tipos) == 2 and tipos[0] == tipos[1] and tipos[0] != 'desconocido'
 
-# Tests básicos
+def mostrar_numero_formateado(valor, unidad=""):
+    """
+    Función auxiliar para mostrar números formateados con unidades
+    Elimina ceros innecesarios automáticamente
+    """
+    if valor is None or valor == 0:
+        return f"0 {unidad}".strip()
+    
+    valor_formateado = formatear_numero(valor)
+    return f"{valor_formateado} {unidad}".strip()
+
+# Tests básicos mejorados
 if __name__ == "__main__":
+    print("=== PRUEBAS DE FORMATEO SIN CEROS ===")
+    
     # Test conversiones
     print("1000 g =", convertir_unidad(1000, 'g', 'kg'), "kg")
     print("1 kg =", convertir_unidad(1, 'kg', 'g'), "g")
-    print("1000 ml =", convertir_unidad(1000, 'ml', 'L'), "L")
     
-    # Test formato - CASOS DE PRUEBA
-    print("35.0 →", formatear_numero(35.0))  # Debe mostrar "35"
-    print("5.06 →", formatear_numero(5.06))  # Debe mostrar "5,06"  
-    print("1234.567 →", formatear_numero(1234.567))  # Debe mostrar "1.234,567"
-    print("0.001234 →", formatear_numero(0.001234))  # Debe mostrar "0,001234"
-    print("1000.00 →", formatear_numero(1000.00))  # Debe mostrar "1.000"
+    # Test formato - CASOS CRÍTICOS MEJORADOS
+    test_cases = [
+        (35.0, "35.0 → Debe mostrar '35'"),
+        (35.000000, "35.000000 → Debe mostrar '35'"),
+        (5.06, "5.06 → Debe mostrar '5,06'"),  
+        (5.060000, "5.060000 → Debe mostrar '5,06'"),
+        (1234.567, "1234.567 → Debe mostrar '1.234,567'"),
+        (1234.567000, "1234.567000 → Debe mostrar '1.234,567'"),
+        (0.001234, "0.001234 → Debe mostrar '0,001234'"),
+        (0.001234000, "0.001234000 → Debe mostrar '0,001234'"),
+        (1000.00, "1000.00 → Debe mostrar '1.000'"),
+        (1000.00100, "1000.00100 → Debe mostrar '1.000,001'"),
+        (0.0, "0.0 → Debe mostrar '0'"),
+        (0.0000, "0.0000 → Debe mostrar '0'"),
+        (1234567.890, "1234567.890 → Debe mostrar '1.234.567,89'"),
+    ]
+    
+    for numero, descripcion in test_cases:
+        resultado = formatear_numero(numero)
+        print(f"{descripcion}")
+        print(f"Resultado: '{resultado}'\n")
