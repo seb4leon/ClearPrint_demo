@@ -193,80 +193,181 @@ tabs = st.tabs([
 ])
 
 # =============================================================================
-# PESTAÑA 0: BIENVENIDA/INICIO
+# PESTAÑA 0: BIENVENIDA/INICIO (COMPLETAMENTE REDISEÑADA)
 # =============================================================================
 with tabs[0]:
-    st.title("🌍 Calculadora de Huella de Carbono")
-    st.markdown("---")
+    st.title("🌍 ClearPrint - Calculadora de Huella de Carbono")
     
     st.markdown("""
-    <div style='background-color: #e8f5e8; padding: 20px; border-radius: 10px; border-left: 5px solid #4CAF50;'>
-    <h2 style='color: #2e7d32; margin-top: 0;'>¡Bienvenido/a a la Calculadora de Huella de Carbono!</h2>
-    <p style='color: #555; font-size: 16px;'>Esta herramienta te permitirá calcular el impacto ambiental de tu producto con un sistema completo de trazabilidad.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Nuevas características de la FASE 1
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("""
-        <div style='background-color: #e3f2fd; padding: 15px; border-radius: 10px; text-align: center;'>
-        <h3 style='color: #1565c0;'>⚖️ Sistema de Unidades</h3>
-        <p>• Conversión automática<br>• Múltiples unidades<br>• Formato español<br>• Flexibilidad total</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div style='background-color: #f3e5f5; padding: 15px; border-radius: 10px; text-align: center;'>
-        <h3 style='color: #7b1fa2;'>🚚 Transporte Individual</h3>
-        <p>• Rutas por material<br>• Múltiples segmentos<br>• Origen/destino<br>• Trazabilidad completa</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div style='background-color: #fff3e0; padding: 15px; border-radius: 10px; text-align: center;'>
-        <h3 style='color: #ef6c00;'>📊 Balance Real</h3>
-        <p>• Merma real<br>• Comprado vs usado<br>• Gestión por elemento<br>• Coherencia total</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    with st.expander("📖 **Nuevas Características - FASE 1**", expanded=True):
-        st.markdown("""
-        ### 🆕 **¿Qué hay de nuevo?**
-        
-        **Sistema de Unidades Inteligente:**
-        - Ingresa datos en las unidades que prefieras (g, kg, ton, mL, L, m³)
-        - Conversión automática a unidades estándar
-        - Formato español con puntos para miles y comas para decimales
-        
-        **Transporte Individual por Material:**
-        - Cada materia prima y empaque tiene sus propias rutas
-        - Múltiples segmentos de transporte por elemento
-        - Origen y destino específicos para trazabilidad
-        
-        **Balance de Masa Real:**
-        - Diferenciación entre cantidad comprada y cantidad usada
-        - Cálculo automático de mermas y pérdidas
-        - Gestión individual de residuos por elemento
-        
-        ### 🚀 **Flujo de Trabajo Mejorado**
-        1. **Definir producto** con unidades flexibles
-        2. **Materias primas** con compra real vs teórica
-        3. **Empaques** del producto final
-        4. **Transporte individual** por material
-        5. **Producción** con gestión de mermas
-        6. **Resultados** con trazabilidad completa
-        """)
-    
+<div style="border: 2px solid #1976d2; border-radius: 12px; padding: 1.5em; background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%); box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+
+<div style="text-align: center; margin-bottom: 1.5em;">
+<span style="font-size: 2em;">🌱</span>
+<h2 style="color: #1976d2; margin: 0.5em 0; font-size: 1.8em;">¡Bienvenido a ClearPrint!</h2>
+<p style="font-size: 1.2em; color: #555; margin: 0;">Calculadora profesional de huella de carbono para productos</p>
+</div>
+
+<div style="background: white; border-radius: 8px; padding: 1.2em; margin: 1.5em 0; border-left: 4px solid #4CAF50;">
+<h3 style="color: #2E7D32; margin-top: 0;">🎯 ¿Por qué medir la huella de carbono de tu producto?</h3>
+<p style="margin-bottom: 0;">Cada vez más consumidores y mercados valoran la <strong>sostenibilidad ambiental</strong>. Conocer y reducir la huella de carbono de tus productos te ayuda a:</p>
+<ul style="margin: 0.5em 0;">
+<li>📈 <strong>Diferenciarte</strong> en el mercado con productos sostenibles</li>
+<li>🏆 <strong>Obtener certificaciones</strong> ambientales y ecoetiquetas</li>
+<li>💰 <strong>Reducir costos</strong> optimizando materiales y procesos</li>
+<li>🌍 <strong>Contribuir activamente</strong> a la lucha contra el cambio climático</li>
+<li>📊 <strong>Cumplir regulaciones</strong> ambientales emergentes</li>
+</ul>
+</div>
+
+<div style="background: white; border-radius: 8px; padding: 1.2em; margin: 1.5em 0;">
+<h3 style="color: #1976d2; margin-top: 0;">📊 ¿Qué hace esta herramienta?</h3>
+<p>ClearPrint calcula la huella de carbono de tu producto siguiendo un enfoque de <strong>Análisis de Ciclo de Vida (ACV)</strong>. Analiza todas las etapas, desde la materia prima hasta el fin de vida:</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 1em 0;">
+<div style="background: #E3F2FD; padding: 0.8em; border-radius: 6px; text-align: center;">🌾 <strong>Materias Primas</strong><br><small>Producción y extracción</small></div>
+<div style="background: #E8F5E8; padding: 0.8em; border-radius: 6px; text-align: center;">📦 <strong>Empaques</strong><br><small>Materiales y producción</small></div>
+<div style="background: #FFF3E0; padding: 0.8em; border-radius: 6px; text-align: center;">🚚 <strong>Transporte</strong><br><small>Logística completa</small></div>
+<div style="background: #F3E5F5; padding: 0.8em; border-radius: 6px; text-align: center;">⚡ <strong>Producción</strong><br><small>Energía y agua</small></div>
+<div style="background: #E0F2F1; padding: 0.8em; border-radius: 6px; text-align: center;">🏪 <strong>Distribución</strong><br><small>Almacenamiento y venta</small></div>
+<div style="background: #FFEBEE; padding: 0.8em; border-radius: 6px; text-align: center;">♻️ <strong>Fin de Vida</strong><br><small>Uso y disposición</small></div>
+</div>
+</div>
+
+<div style="background: #FFF8E1; border-radius: 8px; padding: 1.2em; margin: 1.5em 0; border-left: 4px solid #FFA000;">
+<h3 style="color: #F57C00; margin-top: 0;">📋 ¿Qué información necesitas tener lista?</h3>
+<p><strong>Para un cálculo preciso, reúne esta información de tu producto:</strong></p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin: 1em 0;">
+<div>
+<strong>📝 Información del Producto:</strong><br>
+• Nombre y descripción del producto<br>
+• Peso neto y peso del empaque<br>
+• Unidad funcional (ej: "1 unidad", "1 kg")
+</div>
+<div>
+<strong>🌾 Materias Primas:</strong><br>
+• Lista de ingredientes o componentes<br>
+• Cantidades compradas vs. utilizadas<br>
+• Origen de los materiales
+</div>
+<div>
+<strong>📦 Empaques:</strong><br>
+• Tipos de materiales de empaque<br>
+• Peso de cada componente<br>
+• Cantidad por producto
+</div>
+<div>
+<strong>🚚 Transporte:</strong><br>
+• Distancias de transporte<br>
+• Modos de transporte utilizados<br>
+• Rutas de suministro
+</div>
+<div>
+<strong>⚡ Procesos:</strong><br>
+• Consumo energético en producción<br>
+• Consumo de agua<br>
+• Gestión de residuos y mermas
+</div>
+<div>
+<strong>♻️ Ciclo de Vida:</strong><br>
+• Distribución a mercados<br>
+• Consumos durante uso (si aplica)<br>
+• Gestión de fin de vida
+</div>
+</div>
+<p style="margin-top: 1em; color: #F57C00; font-style: italic;">
+💡 <strong>Consejo:</strong> No necesitas toda la información para comenzar. Puedes empezar con lo básico y completar después.
+</p>
+</div>
+
+<div style="background: white; border-radius: 8px; padding: 1.2em; margin: 1.5em 0;">
+<h3 style="color: #1976d2; margin-top: 0;">🛤️ ¿Cómo funciona el proceso?</h3>
+<div style="display: flex; align-items: center; justify-content: space-around; flex-wrap: wrap; margin: 1em 0;">
+<div style="text-align: center; margin: 0.5em; width: 150px;">
+<div style="background: #1976d2; color: white; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5em; font-weight: bold; font-size: 1.2em;">1</div>
+<p style="font-weight: bold; color: #1976d2; margin: 0.2em 0;">Define tu Producto</p>
+<small>Características básicas y peso</small>
+</div>
+<div style="font-size: 1.5em; color: #1976d2;">→</div>
+<div style="text-align: center; margin: 0.5em; width: 150px;">
+<div style="background: #1976d2; color: white; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5em; font-weight: bold; font-size: 1.2em;">2</div>
+<p style="font-weight: bold; color: #1976d2; margin: 0.2em 0;">Ingresa los Materiales</p>
+<small>Materias primas y empaques</small>
+</div>
+<div style="font-size: 1.5em; color: #1976d2;">→</div>
+<div style="text-align: center; margin: 0.5em; width: 150px;">
+<div style="background: #1976d2; color: white; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5em; font-weight: bold; font-size: 1.2em;">3</div>
+<p style="font-weight: bold; color: #1976d2; margin: 0.2em 0;">Configura Transporte</p>
+<small>Rutas y logística</small>
+</div>
+<div style="font-size: 1.5em; color: #1976d2;">→</div>
+<div style="text-align: center; margin: 0.5em; width: 150px;">
+<div style="background: #1976d2; color: white; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5em; font-weight: bold; font-size: 1.2em;">4</div>
+<p style="font-weight: bold; color: #1976d2; margin: 0.2em 0;">Procesos y Distribución</p>
+<small>Producción y venta</small>
+</div>
+<div style="font-size: 1.5em; color: #1976d2;">→</div>
+<div style="text-align: center; margin: 0.5em; width: 150px;">
+<div style="background: #1976d2; color: white; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5em; font-weight: bold; font-size: 1.2em;">5</div>
+<p style="font-weight: bold; color: #1976d2; margin: 0.2em 0;">Obtén Resultados</p>
+<small>Análisis completo</small>
+</div>
+</div>
+<p style="text-align: center; color: #666; margin-top: 1em;">
+💡 <strong>Navegación sencilla:</strong> Usa las pestañas superiores para moverte entre las diferentes etapas
+</p>
+</div>
+
+<div style="background: white; border-radius: 8px; padding: 1.2em; margin: 1.5em 0;">
+<h3 style="color: #1976d2; margin-top: 0;">✨ Características Destacadas</h3>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin: 1em 0;">
+<div style="border: 1px solid #E3F2FD; border-radius: 8px; padding: 1em; background: #f8fcff;">
+<h4 style="color: #1565c0; margin-top: 0;">⚖️ Sistema Inteligente de Unidades</h4>
+<ul style="margin: 0.5em 0; padding-left: 1.2em;">
+<li>Ingresa datos en cualquier unidad (g, kg, ton, mL, L, m³)</li>
+<li>Conversión automática al sistema internacional</li>
+<li>Formato español con puntos para miles</li>
+</ul>
+</div>
+<div style="border: 1px solid #E8F5E8; border-radius: 8px; padding: 1em; background: #f8fff8;">
+<h4 style="color: #2E7D32; margin-top: 0;">🚚 Transporte Individualizado</h4>
+<ul style="margin: 0.5em 0; padding-left: 1.2em;">
+<li>Rutas específicas por material</li>
+<li>Múltiples segmentos de transporte</li>
+<li>Trazabilidad completa origen-destino</li>
+</ul>
+</div>
+<div style="border: 1px solid #FFF3E0; border-radius: 8px; padding: 1em; background: #fffbf0;">
+<h4 style="color: #EF6C00; margin-top: 0;">📊 Gestión Real de Mermas</h4>
+<ul style="margin: 0.5em 0; padding-left: 1.2em;">
+<li>Diferenciación comprado vs. usado</li>
+<li>Cálculo automático de pérdidas</li>
+<li>Gestión individual por elemento</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div style="background: #E8F5E8; border-radius: 8px; padding: 1.2em; margin: 1.5em 0; border-left: 4px solid #4CAF50;">
+<h3 style="color: #2E7D32; margin-top: 0;">🎁 ¿Qué obtienes al final?</h3>
+<ul style="margin: 0.5em 0;">
+<li>📊 <strong>Reporte completo</strong> de huella de carbono por etapa</li>
+<li>📈 <strong>Gráficos interactivos</strong> y visualizaciones claras</li>
+<li>📄 <strong>Exportación a Excel</strong> para análisis detallado</li>
+<li>💡 <strong>Identificación</strong> de puntos críticos de impacto</li>
+<li>🎯 <strong>Recomendaciones personalizadas</strong> para reducción</li>
+<li>🔍 <strong>Comparativa</strong> de diferentes escenarios</li>
+</ul>
+</div>
+
+<div style="text-align: center; margin-top: 2em; padding: 1em; background: #f8f9fa; border-radius: 8px;">
+<p style="margin: 0; color: #666; font-size: 0.9em;">
+<strong>Metodología científica:</strong> Basado en estándares internacionales de Análisis de Ciclo de Vida (ACV)<br>
+</p>
+</div>
+
+</div>
+""", unsafe_allow_html=True)
+
     st.markdown("---")
-    st.success("**FASE 1 IMPLEMENTADA** - Sistema con unidades y transporte individual")
 
 # =============================================================================
 # PESTAÑA 1: DEFINIR PRODUCTO (CORREGIDA - sin ceros decimales)
