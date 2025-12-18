@@ -662,6 +662,7 @@ with tabs[3]:
                             min_value=0.0,
                             value=float(st.session_state.empaques[i].get('peso', 0.0)),
                             key=f"empaque_peso_{i}",
+                            format="%.10g",  # Permitir hasta 10 decimales sin relleno
                             step=0.001  # Paso razonable para empaques
                         )
                     with col_peso2:
@@ -1086,18 +1087,32 @@ with tabs[6]:
             st.session_state.produccion['residuos_empaques'] = []
         
         with st.form("produccion_mermas"):
-            # SECCIÓN 1: CONSUMOS DE PRODUCCIÓN
+            # SECCIÓN 1: CONSUMOS DE PRODUCCIÓN (CORREGIDO DEFINITIVAMENTE)
             st.subheader("⚡ Consumos de Producción")
             
             col1, col2 = st.columns(2)
             with col1:
-                st.session_state.produccion['energia_kwh'] = st.number_input(
+                # CONSUMO DE ENERGÍA - FORMATEO MEJORADO
+                # Obtener valor actual
+                valor_energia = st.session_state.produccion['energia_kwh']
+                
+                # Usar un campo con formato especial
+                energia_input = st.number_input(
                     "**Consumo de energía (kWh)**", 
                     min_value=0.0,
-                    value=float(st.session_state.produccion['energia_kwh']),
-                    step=1.0,  # Paso razonable
-                    help="Energía total consumida en el proceso productivo"
+                    value=float(valor_energia),
+                    format="%.10g",  # Permitir hasta 10 decimales sin relleno
+                    step=0.0000000001,  # Paso para permitir decimales
+                    help="Energía total consumida en el proceso productivo (ej: 0.001234)",
+                    key="energia_produccion_input"
                 )
+                
+                # Guardar el valor exacto
+                st.session_state.produccion['energia_kwh'] = energia_input
+                
+                # Mostrar el valor formateado para feedback visual
+                if energia_input > 0:
+                    st.caption(f"Valor actual: {formatear_numero(energia_input)} kWh")
                 
                 # CORRECCIÓN: Manejar índice de manera segura
                 tipo_energia_actual = st.session_state.produccion['tipo_energia']
@@ -1112,29 +1127,28 @@ with tabs[6]:
                 )
             
             with col2:
-                st.session_state.produccion['agua_m3'] = st.number_input(
+                # CONSUMO DE AGUA - FORMATEO MEJORADO
+                # Obtener valor actual
+                valor_agua = st.session_state.produccion['agua_m3']
+                
+                # Usar un campo con formato especial
+                agua_input = st.number_input(
                     "**Consumo de agua (m³)**", 
                     min_value=0.0,
-                    value=float(st.session_state.produccion['agua_m3']),
-                    step=0.1,  # Paso razonable
-                    help="Agua utilizada en el proceso productivo"
+                    value=float(valor_agua),
+                    format="%.10g",  # Permitir hasta 10 decimales sin relleno
+                    step=0.0000000001,  # Paso para permitir decimales
+                    help="Agua utilizada en el proceso productivo (ej: 0.000567)",
+                    key="agua_produccion_input"
                 )
                 
-                # Opcional: otros consumos
-                st.session_state.produccion['otros_consumos'] = st.number_input(
-                    "**Otros consumos (opcional)**", 
-                    min_value=0.0,
-                    value=float(st.session_state.produccion.get('otros_consumos', 0.0)),
-                    step=0.1,  # Paso razonable
-                    help="Otros consumos (gas, vapor, etc.)"
-                )
-                st.session_state.produccion['unidad_otros'] = st.text_input(
-                    "Unidad otros consumos",
-                    value=st.session_state.produccion.get('unidad_otros', ''),
-                    placeholder="Ej: m³ gas, kg vapor",
-                    help="Unidad de los otros consumos"
-                )
-            
+                # Guardar el valor exacto
+                st.session_state.produccion['agua_m3'] = agua_input
+                
+                # Mostrar el valor formateado para feedback visual
+                if agua_input > 0:
+                    st.caption(f"Valor actual: {formatear_numero(agua_input)} m³")
+                 
             # SECCIÓN 2: GESTIÓN DE MERMAS (AUTOMÁTICA DESDE PÁGINA 2)
             st.subheader("📊 Gestión de Mermas")
             
@@ -1361,7 +1375,11 @@ with tabs[6]:
             st.metric("Residuos empaques", len(residuos_activos))
         with col_r3:
             consumo_total_kwh = st.session_state.produccion['energia_kwh']
-            st.metric("Consumo energía", f"{formatear_numero(consumo_total_kwh)} kWh")
+            # Mostrar solo con decimales si es necesario
+            if consumo_total_kwh == 0.0:
+                st.metric("Consumo energía", "0.00 kWh")
+            else:
+                st.metric("Consumo energía", f"{formatear_numero(consumo_total_kwh)} kWh")
 
 # =============================================================================
 # PESTAÑA 7: DISTRIBUCIÓN (CORREGIDA - sin ceros decimales)
@@ -1660,7 +1678,7 @@ with tabs[8]:
         opciones_almacenamiento = {
             'temperatura_ambiente': {
                 'nombre': 'Temperatura ambiente (estante)',
-                'factor_energia': 0.784931507  # kWh por día (iluminación básica)
+                'factor_energia': 0.0016438367  # kWh por día (iluminación básica)
             },
             'congelado': {
                 'nombre': 'Congelado/Refrigerado',
@@ -1701,7 +1719,7 @@ with tabs[8]:
                     "**Consumo energético diario (kWh/día)**",
                     min_value=0.0,
                     value=float(opciones_almacenamiento[tipo_key]['factor_energia']),
-                    format="%.10f",  # Permitir hasta 10 decimales sin relleno
+                    format="%.10g",  # Permitir hasta 10 decimales sin relleno
                     step=0.0000000001,  # Paso mínimo
                     help="Puede ajustar el consumo según las condiciones específicas del retail"
                 )
@@ -1789,7 +1807,7 @@ with tabs[9]:
                 'emisiones_fin_vida': 0.0  # NUEVO: para almacenar emisiones
             }
         
-        # Sección 1: Consumos Durante Uso
+        # Sección 1: Consumos Durante Uso (CORREGIDO DEFINITIVAMENTE)
         st.subheader("🔌 Consumos Durante Uso")
         
         tiene_consumos = st.checkbox(
@@ -1805,26 +1823,48 @@ with tabs[9]:
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    energia = st.number_input(
+                    # ENERGÍA - FORMATEO MEJORADO
+                    energia_valor = st.session_state.uso_fin_vida.get('energia_uso_kwh', 0.0)
+                    
+                    # Usar un campo con formato especial
+                    energia_input = st.number_input(
                         "Consumo energético por uso (kWh)",
                         min_value=0.0,
-                        value=float(st.session_state.uso_fin_vida.get('energia_uso_kwh', 0.0)),
-                        help="Energía consumida en cada uso del producto",
-                        format="%.10f",  # Permitir hasta 10 decimales sin relleno
-                        step=0.0000000001,  # Paso mínimo
-                        key="energia_uso"
+                        value=float(energia_valor),
+                        format="%.10g",  # Permitir hasta 10 decimales sin relleno
+                        step=0.0000000001,  # Paso para permitir decimales
+                        help="Energía consumida en cada uso del producto (ej: 0.001234)",
+                        key="energia_uso_input"
                     )
                     
+                    # Guardar el valor exacto
+                    st.session_state.uso_fin_vida['energia_uso_kwh'] = energia_input
+                    
+                    # Mostrar el valor formateado para feedback visual
+                    if energia_input > 0:
+                        st.caption(f"Valor actual: {formatear_numero(energia_input)} kWh")
+                    
                 with col2:
-                    agua = st.number_input(
+                    # AGUA - FORMATEO MEJORADO
+                    agua_valor = st.session_state.uso_fin_vida.get('agua_uso_m3', 0.0)
+                    
+                    # Usar un campo con formato especial
+                    agua_input = st.number_input(
                         "Consumo de agua por uso (m³)",
                         min_value=0.0,
-                        value=float(st.session_state.uso_fin_vida.get('agua_uso_m3', 0.0)),
-                        help="Agua consumida en cada uso del producto",
-                        format="%.10f",  # Permitir hasta 10 decimales sin relleno
-                        step=0.0000000001,  # Paso mínimo
-                        key="agua_uso"
+                        value=float(agua_valor),
+                        format="%.10g",  # Permitir hasta 10 decimales sin relleno
+                        step=0.0000000001,  # Paso para permitir decimales
+                        help="Agua consumida en cada uso del producto (ej: 0.000567)",
+                        key="agua_uso_input"
                     )
+                    
+                    # Guardar el valor exacto
+                    st.session_state.uso_fin_vida['agua_uso_m3'] = agua_input
+                    
+                    # Mostrar el valor formateado para feedback visual
+                    if agua_input > 0:
+                        st.caption(f"Valor actual: {formatear_numero(agua_input)} m³")
                     
                 with col3:
                     tiempo = st.number_input(
@@ -1834,10 +1874,11 @@ with tabs[9]:
                         help="Duración estimada del producto",
                         key="tiempo_vida"
                     )
+                    st.session_state.uso_fin_vida['tiempo_vida_util'] = tiempo
                 
                 # Calcular emisiones preliminares - CORREGIDO
-                emisiones_energia = calcular_emisiones_energia(energia, 'electricidad', factores)
-                emisiones_agua = calcular_emisiones_agua(agua, factores)
+                emisiones_energia = calcular_emisiones_energia(energia_input, 'electricidad', factores)
+                emisiones_agua = calcular_emisiones_agua(agua_input, factores)
                 emisiones_totales = emisiones_energia + emisiones_agua
                 
                 # Mostrar estimación de emisiones
@@ -1856,8 +1897,8 @@ with tabs[9]:
                 if submitted:
                     st.session_state.uso_fin_vida.update({
                         'tiene_consumos': True,
-                        'energia_uso_kwh': energia,
-                        'agua_uso_m3': agua,
+                        'energia_uso_kwh': energia_input,
+                        'agua_uso_m3': agua_input,
                         'tiempo_vida_util': tiempo,
                         'emisiones_uso': emisiones_totales
                     })
@@ -2052,7 +2093,7 @@ with tabs[9]:
                     )
 
 # =============================================================================
-# PESTAÑA 10: RESULTADOS (COMPLETAMENTE CORREGIDA)
+# PESTAÑA 10: RESULTADOS (COMPLETAMENTE CORREGIDA Y MEJORADA)
 # =============================================================================
 with tabs[10]:
     st.title("10. Resultados de Huella de Carbono")
@@ -2130,77 +2171,168 @@ with tabs[10]:
                 - Peso en distribución incluye producto + empaques del producto final
                 """)
             
-            # 1. RESUMEN EJECUTIVO
+            # VALIDACIÓN DE CÁLCULOS
+            st.subheader("🔍 Validación de Cálculos")
+            
+            # Verificar que todas las etapas se están calculando
+            etapas_calculadas = []
+            etapas_faltantes = []
+            
+            for etapa_nombre, etapa_key in [
+                ('Materias Primas', 'materias_primas'),
+                ('Empaques', 'empaques'),
+                ('Transporte', 'transporte'),
+                ('Procesamiento', 'procesamiento'),
+                ('Distribución', 'distribucion'),
+                ('Retail', 'retail'),
+                ('Uso/Fin Vida', 'fin_vida')
+            ]:
+                etapa = desglose_detallado.get(etapa_key, {})
+                total_etapa = etapa.get('total', 0)
+                
+                if total_etapa > 0.0001:
+                    etapas_calculadas.append(etapa_nombre)
+                else:
+                    etapas_faltantes.append(etapa_nombre)
+            
+            col_val1, col_val2 = st.columns(2)
+            with col_val1:
+                st.success(f"✅ **Etapas con emisiones:** {len(etapas_calculadas)}")
+                if etapas_calculadas:
+                    st.write(", ".join(etapas_calculadas))
+                
+            with col_val2:
+                if etapas_faltantes:
+                    st.warning(f"⚠️ **Etapas sin emisiones:** {len(etapas_faltantes)}")
+                    st.write(", ".join(etapas_faltantes))
+                    st.caption("Estas etapas pueden no tener datos o tener valores muy bajos")
+                else:
+                    st.success("✅ Todas las etapas tienen emisiones calculadas")
+            
+            # 1. RESUMEN EJECUTIVO (CORREGIDO - UNIDADES CLARAS)
             st.header("📊 Resumen Ejecutivo")
+            
+            # Obtener unidad funcional
+            unidad_funcional = st.session_state.producto.get('unidad_funcional', '1 unidad')
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Huella Total", f"{formatear_numero(emisiones_totales, 4)} kg CO₂e")
+                st.metric(
+                    f"Huella Total por {unidad_funcional}", 
+                    f"{formatear_numero(emisiones_totales, 4)} kg CO₂e"
+                )
             with col2:
                 emisiones_g = emisiones_totales * 1000
-                st.metric("Huella Total", f"{formatear_numero(emisiones_g, 4)} g CO₂e")
+                st.metric(
+                    f"Huella Total por {unidad_funcional}", 
+                    f"{formatear_numero(emisiones_g, 4)} g CO₂e"
+                )
             with col3:
                 # Calcular por kg de producto
                 if peso_producto_kg > 0:
                     emisiones_por_kg = emisiones_totales / peso_producto_kg
-                    st.metric("Por kg de producto", f"{formatear_numero(emisiones_por_kg, 4)} kg CO₂e/kg")
+                    st.metric(
+                        "Huella por kg de producto", 
+                        f"{formatear_numero(emisiones_por_kg, 4)} kg CO₂e/kg"
+                    )
                 else:
-                    st.metric("Por kg de producto", "N/A")
+                    st.metric("Huella por kg de producto", "N/A")
             with col4:
                 if peso_producto_kg > 0:
                     emisiones_por_kg_g = (emisiones_totales / peso_producto_kg) * 1000
-                    st.metric("Por kg de producto", f"{formatear_numero(emisiones_por_kg_g, 4)} g CO₂e/kg")
+                    st.metric(
+                        "Huella por kg de producto", 
+                        f"{formatear_numero(emisiones_por_kg_g, 4)} g CO₂e/kg"
+                    )
+                else:
+                    st.metric("Huella por kg de producto", "N/A")
             
-            # 2. DISTRIBUCIÓN POR ETAPA (GRÁFICOS)
+            # 2. DISTRIBUCIÓN POR ETAPA (GRÁFICOS MEJORADOS)
             st.subheader("📈 Distribución de Huella de Carbono por Etapa")
             
-            # Preparar datos para gráficos - CORREGIDO: manejar casos donde no hay datos
+            # Preparar datos para gráficos - INCLUIR TODAS LAS ETAPAS CON NOMBRES CLAROS
             etapas_totales = {
-                'Materias Primas': desglose_detallado.get('materias_primas', {}).get('total', 0),
-                'Empaques': desglose_detallado.get('empaques', {}).get('total', 0),
-                'Transporte': desglose_detallado.get('transporte', {}).get('total', 0),
-                'Procesamiento': desglose_detallado.get('procesamiento', {}).get('total', 0),
-                'Distribución': desglose_detallado.get('distribucion', {}).get('total', 0),
-                'Retail': desglose_detallado.get('retail', {}).get('total', 0),
-                'Fin de Vida': desglose_detallado.get('fin_vida', {}).get('total', 0)
+                '1. Materias Primas': desglose_detallado.get('materias_primas', {}).get('total', 0),
+                '2. Empaques Producto': desglose_detallado.get('empaques', {}).get('total', 0),
+                '3. Transporte (MP + Emp)': desglose_detallado.get('transporte', {}).get('total', 0),
+                '4. Producción': desglose_detallado.get('procesamiento', {}).get('total', 0),
+                '5. Distribución': desglose_detallado.get('distribucion', {}).get('total', 0),
+                '6. Retail': desglose_detallado.get('retail', {}).get('total', 0),
+                '7. Uso/Fin Vida': desglose_detallado.get('fin_vida', {}).get('total', 0)
             }
             
-            # Filtrar etapas con emisiones significativas
-            etapas_significativas = {k: v for k, v in etapas_totales.items() if v > 0.001}
+            # Filtrar etapas con emisiones significativas (> 0.0001 kg CO₂e)
+            etapas_significativas = {k: v for k, v in etapas_totales.items() if v > 0.0001}
             
             if etapas_significativas:
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    # Gráfico de barras
+                    # Gráfico de barras - CON COLORES DIFERENTIADOS
                     fig_barras = px.bar(
                         x=list(etapas_significativas.keys()),
                         y=list(etapas_significativas.values()),
-                        title="Huella de Carbono por Etapa (kg CO₂e)",
+                        title=f"Huella de Carbono por Etapa (kg CO₂e por {unidad_funcional})",
                         labels={'x': 'Etapa del Ciclo de Vida', 'y': 'kg CO₂e'},
-                        color=list(etapas_significativas.values()),
-                        color_continuous_scale='Viridis'
+                        color=list(etapas_significativas.keys()),  # Color por categoría
+                        color_discrete_sequence=px.colors.qualitative.Set3
                     )
                     fig_barras.update_traces(
                         text=[f"{formatear_numero(v, 4)} kg" for v in etapas_significativas.values()],
-                        textposition='auto'
+                        textposition='auto',
+                        textfont_size=12
                     )
-                    fig_barras.update_layout(showlegend=False)
+                    fig_barras.update_layout(
+                        showlegend=False,
+                        xaxis_title="Etapa del Ciclo de Vida",
+                        yaxis_title=f"kg CO₂e por {unidad_funcional}",
+                        height=500
+                    )
                     st.plotly_chart(fig_barras, use_container_width=True)
                 
                 with col2:
-                    # Gráfico de torta
+                    # Gráfico de torta - CON PORCENTAJES EXACTOS
                     fig_torta = px.pie(
                         names=list(etapas_significativas.keys()),
                         values=list(etapas_significativas.values()),
-                        title="Distribución Porcentual por Etapa",
-                        hole=0.3
+                        title=f"Distribución Porcentual por Etapa",
+                        hole=0.3,
+                        color_discrete_sequence=px.colors.qualitative.Set3
                     )
                     fig_torta.update_traces(
                         textinfo='percent+label',
-                        textposition='inside'
+                        textposition='inside',
+                        textfont_size=12,
+                        hovertemplate='<b>%{label}</b><br>%{value:.4f} kg CO₂e<br>%{percent}'
+                    )
+                    fig_torta.update_layout(
+                        height=500,
+                        showlegend=True,
+                        legend=dict(
+                            orientation="v",
+                            yanchor="middle",
+                            y=0.5,
+                            xanchor="left",
+                            x=1.05
+                        )
                     )
                     st.plotly_chart(fig_torta, use_container_width=True)
+                
+                # Mostrar tabla de resumen debajo de los gráficos
+                st.subheader("📋 Resumen Numérico por Etapa")
+                
+                datos_resumen_grafico = []
+                for etapa, valor in etapas_significativas.items():
+                    porcentaje = (valor / emisiones_totales * 100) if emisiones_totales > 0 else 0
+                    datos_resumen_grafico.append({
+                        'Etapa': etapa,
+                        'Huella (kg CO₂e)': formatear_numero(valor, 4),
+                        'Huella (g CO₂e)': formatear_numero(valor * 1000, 4),
+                        'Porcentaje': f"{porcentaje:.2f}%"
+                    })
+                
+                df_resumen_grafico = pd.DataFrame(datos_resumen_grafico)
+                st.dataframe(df_resumen_grafico, use_container_width=True)
                 
                 # 3. DESGLOSE DETALLADO POR ETAPA
                 st.header("🔍 Desglose Detallado por Etapa del Ciclo de Vida")
@@ -2381,7 +2513,7 @@ with tabs[10]:
                     else:
                         st.info("No hay datos de transporte")
                 
-                # PROCESAMIENTO
+                # PROCESAMIENTO (MEJORADO)
                 with st.expander("⚡ **4. Procesamiento (Producción)**", expanded=True):
                     etapa_proc = desglose_detallado.get('procesamiento', {})
                     total_proc = etapa_proc.get('total', 0)
@@ -2392,44 +2524,63 @@ with tabs[10]:
                     fuentes_proc = etapa_proc.get('fuentes', {})
                     if fuentes_proc:
                         datos_proc = []
-                        # Procesar fuentes de energía
-                        if 'Energía Producción' in fuentes_proc:
-                            datos_proc.append({
-                                'Fuente': 'Energía Eléctrica',
-                                'Tipo': 'Electricidad de red',
-                                'Consumo': f"{formatear_numero(st.session_state.produccion.get('energia_kwh', 0), 4)} kWh",
-                                'Huella Carbono (kg CO₂e)': formatear_numero(fuentes_proc['Energía Producción'], 4)
-                            })
                         
-                        # Procesar fuentes de agua
-                        if 'Agua Producción' in fuentes_proc:
-                            datos_proc.append({
-                                'Fuente': 'Agua',
-                                'Tipo': 'Agua potable',
-                                'Consumo': f"{formatear_numero(st.session_state.produccion.get('agua_m3', 0), 4)} m³",
-                                'Huella Carbono (kg CO₂e)': formatear_numero(fuentes_proc['Agua Producción'], 4)
-                            })
-                        
-                        # Procesar gestión de mermas
-                        emisiones_mermas_total = sum(
-                            v for k, v in fuentes_proc.items() 
-                            if k.startswith('Merma') and isinstance(v, (int, float))
-                        )
-                        if emisiones_mermas_total > 0:
-                            datos_proc.append({
-                                'Fuente': 'Gestión de Mermas',
-                                'Tipo': 'Residuos de producción',
-                                'Consumo': '-',
-                                'Huella Carbono (kg CO₂e)': formatear_numero(emisiones_mermas_total, 4)
-                            })
+                        # Procesar todas las fuentes de emisión en producción
+                        for fuente, valor in fuentes_proc.items():
+                            if valor > 0.0001:  # Solo mostrar fuentes significativas
+                                if fuente == 'Energía Producción':
+                                    datos_proc.append({
+                                        'Fuente de Emisión': 'Energía Eléctrica',
+                                        'Tipo': st.session_state.produccion.get('tipo_energia', 'Electricidad'),
+                                        'Consumo': f"{formatear_numero(st.session_state.produccion.get('energia_kwh', 0), 4)} kWh",
+                                        'Huella (kg CO₂e)': formatear_numero(valor, 4)
+                                    })
+                                elif fuente == 'Agua Producción':
+                                    datos_proc.append({
+                                        'Fuente de Emisión': 'Agua',
+                                        'Tipo': 'Agua potable',
+                                        'Consumo': f"{formatear_numero(st.session_state.produccion.get('agua_m3', 0), 4)} m³",
+                                        'Huella (kg CO₂e)': formatear_numero(valor, 4)
+                                    })
+                                elif fuente.startswith('Merma'):
+                                    # Gestión de mermas
+                                    nombre_material = fuente.replace('Merma ', '')
+                                    datos_proc.append({
+                                        'Fuente de Emisión': 'Gestión de Residuos',
+                                        'Tipo': f'Merma de {nombre_material}',
+                                        'Consumo': 'Gestión de residuos',
+                                        'Huella (kg CO₂e)': formatear_numero(valor, 4)
+                                    })
+                                else:
+                                    # Otras fuentes
+                                    datos_proc.append({
+                                        'Fuente de Emisión': fuente,
+                                        'Tipo': 'Otras emisiones',
+                                        'Consumo': '-',
+                                        'Huella (kg CO₂e)': formatear_numero(valor, 4)
+                                    })
                         
                         if datos_proc:
                             df_proc = pd.DataFrame(datos_proc)
+                            # Ordenar por huella descendente
+                            df_proc = df_proc.sort_values('Huella (kg CO₂e)', ascending=False, key=lambda col: col.str.replace(',', '.').astype(float) if col.name == 'Huella (kg CO₂e)' else col)
                             st.dataframe(df_proc, use_container_width=True)
+                            
+                            # Mostrar total de energía y agua consumida
+                            st.info(f"**Consumos totales en producción:**")
+                            col_cons1, col_cons2 = st.columns(2)
+                            with col_cons1:
+                                energia_total = st.session_state.produccion.get('energia_kwh', 0)
+                                if energia_total > 0:
+                                    st.metric("Energía consumida", f"{formatear_numero(energia_total)} kWh")
+                            with col_cons2:
+                                agua_total = st.session_state.produccion.get('agua_m3', 0)
+                                if agua_total > 0:
+                                    st.metric("Agua consumida", f"{formatear_numero(agua_total)} m³")
                         else:
-                            st.info("No hay datos detallados de procesamiento")
+                            st.info("No se detectaron emisiones significativas en la producción")
                     else:
-                        st.info("No hay datos de procesamiento")
+                        st.info("No hay datos de emisiones en la producción")
                 
                 # DISTRIBUCIÓN
                 with st.expander("🚛 **5. Distribución**", expanded=True):
@@ -2479,7 +2630,7 @@ with tabs[10]:
                     else:
                         st.info("No hay datos de retail")
                 
-                # FIN DE VIDA
+                # FIN DE VIDA - SECCIÓN COMPLETA REEMPLAZADA
                 with st.expander("♻️ **7. Uso y Fin de Vida**", expanded=True):
                     etapa_fv = desglose_detallado.get('fin_vida', {})
                     total_fv = etapa_fv.get('total', 0)
@@ -2519,9 +2670,32 @@ with tabs[10]:
                         
                         if datos_fv:
                             df_fv = pd.DataFrame(datos_fv)
-                            # Convertir valores a gramos CO₂e para mostrar
-                            df_fv['Huella Carbono (g CO₂e)'] = df_fv['Huella Carbono (kg CO₂e)'].apply(lambda x: float(x.replace(' kg CO₂e', '')) * 1000 if isinstance(x, str) else x * 1000)
-                            df_fv['Huella Carbono (g CO₂e)'] = df_fv['Huella Carbono (g CO₂e)'].apply(lambda x: f"{formatear_numero(x, 4)} g CO₂e")
+                            
+                            # SOLUCIÓN SIMPLE: Crear columna de gramos de manera directa
+                            def calcular_gramos(valor_str):
+                                """Convierte un string formateado a gramos CO₂e"""
+                                try:
+                                    # Extraer solo el número
+                                    if isinstance(valor_str, str):
+                                        # Quitar "kg CO₂e" y espacios
+                                        valor_limpio = valor_str.replace('kg CO₂e', '').replace('CO₂e', '').strip()
+                                        # Reemplazar comas por puntos para conversión
+                                        valor_limpio = valor_limpio.replace(',', '.')
+                                        # Convertir a float
+                                        valor_kg = float(valor_limpio)
+                                    else:
+                                        valor_kg = float(valor_str)
+                                    
+                                    # Calcular gramos y formatear
+                                    gramos = valor_kg * 1000
+                                    return f"{formatear_numero(gramos, 4)} g CO₂e"
+                                    
+                                except Exception as e:
+                                    return "0,0000 g CO₂e"
+                            
+                            # Aplicar la conversión
+                            df_fv['Huella Carbono (g CO₂e)'] = df_fv['Huella Carbono (kg CO₂e)'].apply(calcular_gramos)
+                            
                             st.dataframe(df_fv, use_container_width=True)
                             
                             # Agregar gráfico de torta para uso y fin de vida
@@ -2774,7 +2948,6 @@ with tabs[10]:
             - Al menos una materia prima (Página 2)
             - Datos opcionales en otras páginas para cálculo completo
             """)
-
 # =============================================================================
 # SIDEBAR (INFORMACIÓN ADICIONAL)
 # =============================================================================
@@ -2793,7 +2966,3 @@ if st.sidebar.button("🔄 **Reiniciar Todo**", type="secondary"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.rerun()
-
-# Información de desarrollo
-st.sidebar.markdown("---")
-st.sidebar.info("**FASE 1** ✅ Completada\n- Sistema de unidades\n- Transporte individual\n- Balance real")

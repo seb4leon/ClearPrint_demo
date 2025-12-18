@@ -397,7 +397,7 @@ def calcular_emisiones_retail(retail_data, factores_df):
                 factor_energia, unidad_energia = obtener_factor(factores_df, 'energia', 'electricidad')
                 factor_energia = float(factor_energia)
             except (ValueError, TypeError, IndexError):
-                factor_energia = 0.45
+                factor_energia = 0.2021
                 
             emisiones = consumo_kwh * factor_energia
             emisiones_totales += emisiones
@@ -469,7 +469,7 @@ def calcular_emisiones_uso_fin_vida(uso_fin_vida_data, factores_df):
 def calcular_emisiones_detalladas_completas(session_state, factores_df):
     """
     Calcula TODAS las emisiones del ciclo de vida con desglose detallado por fuente
-    FUNCIÓN PRINCIPAL PARA PESTAÑA DE RESULTADOS
+    VERSIÓN MEJORADA PARA INCLUIR TODAS LAS ETAPAS
     """
     try:
         emisiones_totales = 0.0
@@ -484,91 +484,127 @@ def calcular_emisiones_detalladas_completas(session_state, factores_df):
         }
         
         # 1. MATERIAS PRIMAS
-        emisiones_mp, detalle_mp = calcular_emisiones_materias_primas(
-            session_state.get('materias_primas', []), 
-            factores_df
-        )
-        emisiones_totales += emisiones_mp
-        desglose_detallado['materias_primas']['total'] = emisiones_mp
-        
-        for mp in detalle_mp:
-            if 'producto' in mp:
-                desglose_detallado['materias_primas']['fuentes'][mp['producto']] = {
-                    'emisiones_material': mp.get('emisiones_producto', 0),
-                    'emisiones_empaque': mp.get('emisiones_empaque', 0),
-                    'total': mp.get('total', 0),
-                    'cantidad_kg': mp.get('cantidad_real_kg', 0)
-                }
+        if session_state.get('materias_primas'):
+            emisiones_mp, detalle_mp = calcular_emisiones_materias_primas(
+                session_state['materias_primas'], 
+                factores_df
+            )
+            emisiones_totales += emisiones_mp
+            desglose_detallado['materias_primas']['total'] = emisiones_mp
+            
+            if detalle_mp:
+                for mp in detalle_mp:
+                    if 'producto' in mp:
+                        desglose_detallado['materias_primas']['fuentes'][mp['producto']] = {
+                            'emisiones_material': mp.get('emisiones_producto', 0),
+                            'emisiones_empaque': mp.get('emisiones_empaque', 0),
+                            'total': mp.get('total', 0),
+                            'cantidad_kg': mp.get('cantidad_real_kg', 0)
+                        }
         
         # 2. EMPAQUES
-        emisiones_emp, detalle_emp = calcular_emisiones_empaques(
-            session_state.get('empaques', []), 
-            factores_df
-        )
-        emisiones_totales += emisiones_emp
-        desglose_detallado['empaques']['total'] = emisiones_emp
-        
-        for emp in detalle_emp:
-            nombre = emp.get('nombre', f'Empaque {emp.get("id", "")}')
-            desglose_detallado['empaques']['fuentes'][nombre] = {
-                'emisiones': emp.get('emisiones', 0),
-                'peso_kg': emp.get('peso_total_kg', 0),
-                'material': emp.get('material', '')
-            }
+        if session_state.get('empaques'):
+            emisiones_emp, detalle_emp = calcular_emisiones_empaques(
+                session_state['empaques'], 
+                factores_df
+            )
+            emisiones_totales += emisiones_emp
+            desglose_detallado['empaques']['total'] = emisiones_emp
+            
+            if detalle_emp:
+                for emp in detalle_emp:
+                    nombre = emp.get('nombre', f'Empaque {emp.get("id", "")}')
+                    desglose_detallado['empaques']['fuentes'][nombre] = {
+                        'emisiones': emp.get('emisiones', 0),
+                        'peso_kg': emp.get('peso_total_kg', 0),
+                        'material': emp.get('material', '')
+                    }
         
         # 3. TRANSPORTE (MP + Empaques)
-        emisiones_trans_mp, detalle_trans_mp = calcular_emisiones_transporte_materias_primas(
-            session_state.get('materias_primas', []), 
-            factores_df
-        )
-        emisiones_trans_emp, detalle_trans_emp = calcular_emisiones_transporte_empaques(
-            session_state.get('empaques', []), 
-            factores_df
-        )
+        transporte_total = 0.0
+        detalle_transporte = {'materias_primas': [], 'empaques': []}
         
-        emisiones_transporte_total = emisiones_trans_mp + emisiones_trans_emp
-        emisiones_totales += emisiones_transporte_total
-        desglose_detallado['transporte']['total'] = emisiones_transporte_total
+        # Transporte materias primas
+        if session_state.get('materias_primas'):
+            emisiones_trans_mp, detalle_trans_mp = calcular_emisiones_transporte_materias_primas(
+                session_state['materias_primas'], 
+                factores_df
+            )
+            transporte_total += emisiones_trans_mp
+            detalle_transporte['materias_primas'] = detalle_trans_mp
+        
+        # Transporte empaques
+        if session_state.get('empaques'):
+            emisiones_trans_emp, detalle_trans_emp = calcular_emisiones_transporte_empaques(
+                session_state['empaques'], 
+                factores_df
+            )
+            transporte_total += emisiones_trans_emp
+            detalle_transporte['empaques'] = detalle_trans_emp
+        
+        emisiones_totales += transporte_total
+        desglose_detallado['transporte']['total'] = transporte_total
         desglose_detallado['transporte']['fuentes'] = {
-            'materias_primas': {'emisiones': emisiones_trans_mp, 'detalle': detalle_trans_mp},
-            'empaques': {'emisiones': emisiones_trans_emp, 'detalle': detalle_trans_emp}
+            'materias_primas': {'emisiones': emisiones_trans_mp if 'emisiones_trans_mp' in locals() else 0.0, 
+                               'detalle': detalle_transporte['materias_primas']},
+            'empaques': {'emisiones': emisiones_trans_emp if 'emisiones_trans_emp' in locals() else 0.0, 
+                        'detalle': detalle_transporte['empaques']}
         }
         
-        # 4. PROCESAMIENTO (Producción)
-        emisiones_prod, desglose_prod = calcular_emisiones_produccion(
-            session_state.get('produccion', {}), 
-            factores_df
-        )
-        emisiones_totales += emisiones_prod
-        desglose_detallado['procesamiento']['total'] = emisiones_prod
-        desglose_detallado['procesamiento']['fuentes'] = desglose_prod
+        # 4. PROCESAMIENTO (Producción) - GARANTIZAR QUE SE CALCULE
+        if session_state.get('produccion'):
+            emisiones_prod, desglose_prod = calcular_emisiones_produccion(
+                session_state['produccion'], 
+                factores_df
+            )
+            emisiones_totales += emisiones_prod
+            desglose_detallado['procesamiento']['total'] = emisiones_prod
+            desglose_detallado['procesamiento']['fuentes'] = desglose_prod
         
-        # 5. DISTRIBUCIÓN
-        emisiones_dist, desglose_dist = calcular_emisiones_distribucion(
-            session_state.get('distribucion', {}), 
-            factores_df
-        )
-        emisiones_totales += emisiones_dist
-        desglose_detallado['distribucion']['total'] = emisiones_dist
-        desglose_detallado['distribucion']['fuentes'] = desglose_dist
+        # 5. DISTRIBUCIÓN - GARANTIZAR QUE SE CALCULE
+        if session_state.get('distribucion'):
+            emisiones_dist, desglose_dist = calcular_emisiones_distribucion(
+                session_state['distribucion'], 
+                factores_df
+            )
+            emisiones_totales += emisiones_dist
+            desglose_detallado['distribucion']['total'] = emisiones_dist
+            desglose_detallado['distribucion']['fuentes'] = desglose_dist
         
-        # 6. RETAIL
-        emisiones_retail, desglose_retail = calcular_emisiones_retail(
-            session_state.get('retail', {}), 
-            factores_df
-        )
-        emisiones_totales += emisiones_retail
-        desglose_detallado['retail']['total'] = emisiones_retail
-        desglose_detallado['retail']['fuentes'] = desglose_retail
+        # 6. RETAIL - GARANTIZAR QUE SE CALCULE
+        if session_state.get('retail'):
+            emisiones_retail, desglose_retail = calcular_emisiones_retail(
+                session_state['retail'], 
+                factores_df
+            )
+            emisiones_totales += emisiones_retail
+            desglose_detallado['retail']['total'] = emisiones_retail
+            desglose_detallado['retail']['fuentes'] = desglose_retail
         
-        # 7. FIN DE VIDA
-        emisiones_fin_vida, desglose_fin_vida = calcular_emisiones_uso_fin_vida(
-            session_state.get('uso_fin_vida', {}), 
-            factores_df
-        )
-        emisiones_totales += emisiones_fin_vida
-        desglose_detallado['fin_vida']['total'] = emisiones_fin_vida
-        desglose_detallado['fin_vida']['fuentes'] = desglose_fin_vida
+        # 7. FIN DE VIDA - GARANTIZAR QUE SE CALCULE
+        if session_state.get('uso_fin_vida'):
+            emisiones_fin_vida, desglose_fin_vida = calcular_emisiones_uso_fin_vida(
+                session_state['uso_fin_vida'], 
+                factores_df
+            )
+            emisiones_totales += emisiones_fin_vida
+            desglose_detallado['fin_vida']['total'] = emisiones_fin_vida
+            desglose_detallado['fin_vida']['fuentes'] = desglose_fin_vida
+        
+        # Validar que todas las etapas se calcularon
+        etapas_calculando = [
+            ('materias_primas', 'Materias Primas'),
+            ('empaques', 'Empaques'),
+            ('transporte', 'Transporte'),
+            ('procesamiento', 'Procesamiento'),
+            ('distribucion', 'Distribución'),
+            ('retail', 'Retail'),
+            ('fin_vida', 'Fin de Vida')
+        ]
+        
+        for etapa_key, etapa_nombre in etapas_calculando:
+            if desglose_detallado[etapa_key]['total'] == 0:
+                print(f"⚠️ Advertencia: {etapa_nombre} tiene emisiones 0. Verificar datos de entrada.")
         
         return emisiones_totales, desglose_detallado
         
